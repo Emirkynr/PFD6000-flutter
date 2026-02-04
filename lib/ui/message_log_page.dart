@@ -258,8 +258,8 @@ class _MessageLogPageState extends State<MessageLogPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Notify Hex Data - ${widget.device.name}'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
+        // backgroundColor: Colors.blue, // Use Theme
+        // foregroundColor: Colors.white,
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.format_list_bulleted),
@@ -298,9 +298,10 @@ class _MessageLogPageState extends State<MessageLogPage> {
       body: Column(
         children: [
           // Bağlantı durumu ve kontroller
+          // Bağlantı durumu ve kontroller
           Container(
             padding: const EdgeInsets.all(16),
-            color: Colors.grey.shade100,
+            color: Theme.of(context).colorScheme.surfaceVariant, // or surfaceContainer
             child: Column(
               children: [
                 Row(
@@ -324,8 +325,8 @@ class _MessageLogPageState extends State<MessageLogPage> {
                         icon: const Icon(Icons.bluetooth),
                         label: const Text('Bağlan'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
+                          backgroundColor: Theme.of(context).colorScheme.primary,
+                          foregroundColor: Theme.of(context).colorScheme.onPrimary,
                         ),
                       )
                     else ...[
@@ -512,10 +513,10 @@ class MessageLogTile extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: log.isIncoming ? Colors.blue.shade50 : Colors.grey.shade100,
+                color: log.isIncoming ? Theme.of(context).colorScheme.primaryContainer : Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: log.isIncoming ? Colors.blue.shade200 : Colors.grey.shade300,
+                  color: log.isIncoming ? Theme.of(context).colorScheme.primary.withOpacity(0.3) : Theme.of(context).dividerColor,
                 ),
               ),
               child: Column(
@@ -563,9 +564,9 @@ class MessageLogTile extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
+                        color: Theme.of(context).colorScheme.surfaceVariant,
                         borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.grey.shade300),
+                        border: Border.all(color: Theme.of(context).dividerColor),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -586,10 +587,10 @@ class MessageLogTile extends StatelessWidget {
                           const SizedBox(height: 4),
                           SelectableText(
                             log.content,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'monospace',
                               fontSize: 11,
-                              color: Colors.black54,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ],

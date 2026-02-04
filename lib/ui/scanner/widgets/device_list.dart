@@ -34,14 +34,14 @@ class DeviceList extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.bluetooth_searching, size: 80, color: Colors.grey.shade400),
+                  Icon(Icons.bluetooth_searching, size: 104, color: Theme.of(context).colorScheme.outline),
                   const SizedBox(height: 24),
                   Text(
                     'Cihaz bulunamadı',
                     style: TextStyle(
                       fontSize: 20, 
                       fontWeight: FontWeight.bold, 
-                      color: Colors.grey.shade700
+                      color: Theme.of(context).colorScheme.onSurface
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -49,7 +49,7 @@ class DeviceList extends StatelessWidget {
                     'Yakındaki BLE cihazları taramak için aşağı çekin',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey.shade600
+                      color: Theme.of(context).colorScheme.onSurfaceVariant
                     ),
                     textAlign: TextAlign.center,
                   ),

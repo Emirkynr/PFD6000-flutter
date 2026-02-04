@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <application
-        android:label="pfd6000"
+        android:label="POLITEKNIK BGS"
         android:name="${applicationName}"
         android:icon="@mipmap/pfd6000">
         <activity

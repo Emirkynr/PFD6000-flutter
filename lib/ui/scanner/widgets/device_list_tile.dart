@@ -160,7 +160,7 @@ class DeviceListTile extends StatelessWidget {
           ListTile(
             leading: Icon(
               isConnected ? Icons.bluetooth_connected : Icons.bluetooth,
-              color: isConnected ? Colors.green : Colors.blue,
+              color: isConnected ? Colors.green : Theme.of(context).colorScheme.primary,
             ),
             title: Text(deviceName, style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Column(
