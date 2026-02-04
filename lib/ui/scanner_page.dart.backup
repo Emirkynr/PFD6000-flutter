@@ -1,0 +1,506 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
+import '../ble/ble_manager.dart';
+import '../ble/ble_service.dart';
+import 'scanner/widgets/door_status_banner.dart';
+import 'scanner/widgets/device_list.dart';
+import 'scanner/widgets/message_settings_drawer.dart';
+import 'scanner/managers/card_manager.dart';
+import 'scanner/managers/device_filter.dart';
+import 'scanner/managers/connection_manager.dart';
+import 'scanner/managers/message_sender.dart';
+import 'scanner/managers/card_config_handler.dart';
+import 'message_log_page.dart';
+
+class ScannerPage extends StatefulWidget {
+  const ScannerPage({super.key});
+
+  @override
+  State<ScannerPage> createState() => _ScannerPageState();
+}
+
+class _ScannerPageState extends State<ScannerPage> {
+  final BleManager _bleManager = BleManager();
+  final BleService _bleService = BleService();
+  late final ConnectionManager _connectionManager;
+  late final MessageSender _messageSender;
+  CardConfigHandler? _cardConfigHandler;
+
+  bool scanning = false;
+  Timer? _scanAutoStopTimer;
+  List<DiscoveredDevice> devices = [];
+
+  final Map<String, bool> _deviceConnections = {};
+  bool _buttonsDisabled = false;
+  String _doorStatus = "";
+  StreamSubscription<DeviceConnectionState>? _connectionStateSub;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _connectionManager = ConnectionManager(
+      bleService: _bleService,
+      deviceConnections: _deviceConnections,
+    );
+
+    _messageSender = MessageSender(bleService: _bleService);
+
+    _bleManager.devicesStream.listen((list) {
+      final filtered = list.where((device) => DeviceFilter.hasRawData5054(device)).toList();
+      setState(() => devices = filtered);
+    });
+
+    _connectionStateSub = _bleService.connectionStream.listen((state) {
+      if (!mounted) return;
+      if (_connectionManager.currentDeviceId != null) {
+        setState(() {
+          _deviceConnections[_connectionManager.currentDeviceId!] =
+              state == DeviceConnectionState.connected;
+        });
+      }
+    });
+
+    _startScanWithAutoStop();
+    _startContinuousScanning();
+  }
+
+  void _startScanWithAutoStop() {
+    _bleManager.stopScan();
+    
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (!mounted) return;
+      
+      _bleManager.startScan();
+      setState(() => scanning = true);
+      
+      _scanAutoStopTimer?.cancel();
+      _scanAutoStopTimer = Timer(const Duration(seconds: 20), () {
+        if (!mounted) return;
+        _bleManager.stopScan();
+        setState(() => scanning = false);
+      });
+    });
+  }
+  void _startContinuousScanning() {
+    Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      _startScanWithAutoStop();
+    });
+  }
+
+  Future<void> _connectToDeviceInternal(String deviceId) async {
+    if (_deviceConnections[deviceId] == true && _bleService.isConnected) {
+      return;
+    }
+
+    if (_isConnecting) {
+      return;
+    }
+
+    setState(() {
+      _isConnecting = true;
+      _currentDeviceId = deviceId;
+    });
+
+    try {
+      if (_bleService.isConnected) {
+        await _bleService.disconnect();
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
+
+      final success = await _bleService.connectToDevice(deviceId);
+      if (success) {
+        await _bleService.discoverServices(deviceId);
+        setState(() => _deviceConnections[deviceId] = true);
+      }
+    } catch (e) {
+      print('Bağlantı hatası: $e');
+    } finally {
+      setState(() => _isConnecting = false);
+    }
+  }
+
+  Future<void> _disconnectFromDeviceInternal(String deviceId) async {
+    await _bleService.disconnect();
+    setState(() {
+      _deviceConnections[deviceId] = false;
+      _currentDeviceId = null;
+    });
+  }
+
+  Future<void> _sendEntryMessage(String deviceId) async {
+    if (_buttonsDisabled) return;
+    
+    final cardBytes = await _getConfiguredCardNumber();
+    if (cardBytes.isEmpty) return;
+
+    final commandPrefix = [0x69, 0x7D, 0x63, 0x30, 0xC1, 0xA3, 0xF4, 0x79, 0xDB, 0x5B, 0x3E, 0xF0, 0x52, 0xDF, 0x7D, 0xC6];
+    final binaryMessage = [...commandPrefix, ...cardBytes, 0x00];
+    
+    final cardString = String.fromCharCodes(cardBytes);
+    final commandHex = commandPrefix.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
+    
+    // Mesaj önizlemesini göster
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Giriş Mesajı Gönder'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Gönderilecek mesaj:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text('Komut: 16 byte'),
+            Text('  $commandHex', style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+            const SizedBox(height: 4),
+            Text('Kart: ${cardBytes.length} byte'),
+            Text('  $cardString', style: const TextStyle(fontSize: 11)),
+            const SizedBox(height: 4),
+            const Text('Flag: 0x00 (Giriş)', style: TextStyle(fontSize: 11, color: Colors.blue)),
+            const SizedBox(height: 4),
+            Text('Toplam: ${binaryMessage.length} byte'),
+            const SizedBox(height: 12),
+            const Text('Mesajı göndermek istiyor musunuz?'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Gönder'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmed != true) return;
+
+    try {
+      if (!(_deviceConnections[deviceId] ?? false) || !_bleService.isConnected) {
+        await _connectToDeviceInternal(deviceId);
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+      
+      await _bleService.sendBinaryMessage(binaryMessage);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            duration: Duration(seconds: 2),
+            content: Text('Hoş Geldiniz - Giriş mesajı gönderildi'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      _disableButtonsTemporarily("Kapı açıldı (Giriş)");
+    } catch (e) {
+      print('Giriş mesajı gönderme hatası: $e');
+    } finally {
+      await _disconnectFromDeviceInternal(deviceId);
+    }
+  }
+
+  Future<void> _sendExitMessage(String deviceId) async {
+    if (_buttonsDisabled) return;
+    
+    final cardBytes = await _getConfiguredCardNumber();
+    if (cardBytes.isEmpty) return;
+
+    final binaryMessage = [...cardBytes, 0x01];
+
+    final cardString = String.fromCharCodes(cardBytes);
+    final cardHex = cardBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
+    
+    // Mesaj önizlemesini göster
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Çıkış Mesajı Gönder'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Gönderilecek mesaj: ${binaryMessage.length} byte', style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text('HEX: $cardHex', style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+            Text('STR: $cardString', style: const TextStyle(fontSize: 11)),
+            const SizedBox(height: 4),
+            const Text('Flag: 0x01 (Çıkış)', style: TextStyle(fontSize: 11, color: Colors.orange)),
+            const SizedBox(height: 12),
+            const Text('Mesajı göndermek istiyor musunuz?'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Gönder'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmed != true) return;
+
+    try {
+      if (!(_deviceConnections[deviceId] ?? false) || !_bleService.isConnected) {
+        await _connectToDeviceInternal(deviceId);
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+
+      await _bleService.sendBinaryMessage(binaryMessage);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            duration: Duration(seconds: 2),
+            content: Text('Kart numarası gönderildi - Çıkış'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+      _disableButtonsTemporarily("Kapı açıldı (Çıkış)");
+    } catch (e) {
+      print('Çıkış mesajı gönderme hatası: $e');
+    } finally {
+      await _disconnectFromDeviceInternal(deviceId);
+    }
+  }
+  void _disableButtonsTemporarily(String status) {
+    setState(() {
+      _buttonsDisabled = true;
+      _doorStatus = status;
+    });
+
+    Timer(const Duration(seconds: 6), () {
+      if (!mounted) return;
+      setState(() {
+        _buttonsDisabled = false;
+        _doorStatus = "";
+      });
+      _refreshConnections();
+    });
+  }
+
+  void _refreshConnections() {
+    _bleService.disconnect();
+    setState(() {
+      _deviceConnections.clear();
+      _currentDeviceId = null;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        duration: Duration(seconds: 2),
+        content: Text('Poli BLE bağlantıları yenilendi'),
+        backgroundColor: Colors.blue,
+      ),
+    );
+  }
+
+  void _showMessageLog(DiscoveredDevice device) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MessageLogPage(
+          device: device,
+          bleService: _bleService,
+        ),
+      ),
+    );
+  }
+
+  /// Kart konfigürasyonu işlemi
+  Future<void> _configureCard(String deviceId) async {
+    if (_buttonsDisabled) return;
+
+    try {
+      if (!(_deviceConnections[deviceId] ?? false) || !_bleService.isConnected) {
+        await _connectToDeviceInternal(deviceId);
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+
+      final configMessage = [0x69, 0x7D, 0x63, 0x30, 0xC1, 0xA3, 0xF4, 0x79, 0xDB, 0x5B, 0x3E, 0xF0, 0x52, 0xDF, 0x7D, 0xC6, 0xAE, 0xE8, 0x47, 0x3C, 0xEB, 0xA2, 0xA5, 0x6C, 0xD6, 0xF8, 0xB6, 0x28, 0x05, 0x68, 0x32, 0x38];
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            duration: Duration(seconds: 3),
+            content: Text('Kart konfigürasyonu başlatılıyor... Lütfen kartı okuyucuya yaklaştırın'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+
+      await _bleService.sendBinaryMessage(configMessage);
+      await _listenForCardNumber();
+
+    } catch (e) {
+      await _disconnectFromDeviceInternal(deviceId);
+    }
+  }
+  Future<void> _listenForCardNumber() async {
+    try {
+      StreamSubscription? numberSubscription;
+      
+      final configCommand = [0x69, 0x7D, 0x63, 0x30, 0xC1, 0xA3, 0xF4, 0x79, 0xDB, 0x5B, 0x3E, 0xF0, 0x52, 0xDF, 0x7D, 0xC6, 0xAE, 0xE8, 0x47, 0x3C, 0xEB, 0xA2, 0xA5, 0x6C, 0xD6, 0xF8, 0xB6, 0x28, 0x05, 0x68, 0x32, 0x38];
+      
+      numberSubscription = _bleService.numberStream.listen((cardBytes) {
+        if (cardBytes.isNotEmpty) {
+          if (listEquals(cardBytes, configCommand)) {
+            return;
+          }
+          
+          if (cardBytes.length == 16 || cardBytes.length == 32) {
+            _saveCardToConfig(cardBytes);
+            
+            final displayString = cardBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
+            
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  duration: const Duration(seconds: 3),
+                  content: Text('Kart numarası kaydedildi (${cardBytes.length} byte):\n$displayString'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+            
+            _disconnectFromDeviceInternal(_currentDeviceId ?? '');
+            numberSubscription?.cancel();
+          }
+        }
+      });
+      
+      Timer(const Duration(seconds: 10), () {
+        numberSubscription?.cancel();
+        if (_bleService.isConnected) {
+          _disconnectFromDeviceInternal(_currentDeviceId ?? '');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                duration: Duration(seconds: 2),
+                content: Text('Kart okutma zaman aşımı'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
+      });
+      
+    } catch (e) {
+      print('Kart dinleme hatası: $e');
+    }
+  }
+  Future<void> _saveCardToConfig(List<int> cardBytes) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cardString = cardBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
+      final existingCard = prefs.getString('configured_card_number');
+      
+      if (existingCard != cardString) {
+        await prefs.setString('configured_card_number', cardString);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              duration: const Duration(seconds: 3),
+              content: Text('Yeni kart numarası kaydedildi: $cardString'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Kart kaydetme hatası: $e');
+    }
+  }
+  Future<List<int>> _getConfiguredCardNumber() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cardString = prefs.getString('configured_card_number');
+      if (cardString != null && cardString.isNotEmpty) {
+        return _hexStringToBytes(cardString);
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  List<int> _hexStringToBytes(String hexString) {
+    try {
+      final bytes = <int>[];
+      for (int i = 0; i < hexString.length; i += 2) {
+        final hexByte = hexString.substring(i, i + 2);
+        bytes.add(int.parse(hexByte, radix: 16));
+      }
+      return bytes;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  @override
+  void dispose() {
+    _bleManager.dispose();
+    _bleService.dispose();
+    _connectionStateSub?.cancel();
+    _scanAutoStopTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Poli BLE Reader"),
+        backgroundColor: const Color(0xFF1976D2),
+        foregroundColor: Colors.white,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
+      ),
+      drawer: const Drawer(
+        child: MessageSettingsDrawer(),
+      ),
+      body: Column(
+        children: [
+          DoorStatusBanner(doorStatus: _doorStatus),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                _startScanWithAutoStop();
+                await Future.delayed(const Duration(milliseconds: 400));
+              },
+              child: DeviceList(
+                devices: devices,
+                deviceConnections: _deviceConnections,
+                buttonsDisabled: _buttonsDisabled,
+                onEntry: _sendEntryMessage,
+                onExit: _sendExitMessage,
+                onTest: _showMessageLog,
+                onCardConfig: _configureCard,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
