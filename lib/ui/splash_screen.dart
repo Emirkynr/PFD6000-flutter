@@ -26,7 +26,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 3000), // 3 second animation
+      duration: const Duration(milliseconds: 2000), // 2 second animation
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -38,7 +38,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
 
     _controller.forward().then((_) {
-       // Add 1 second delay after animation for total 4 seconds
+       // Add 1 second delay after animation for total 3 seconds
        Future.delayed(const Duration(milliseconds: 1000), () {
          _navigateToHome();
        });
@@ -77,10 +77,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    // Theme aware background
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDark ? const Color(0xFF121212) : const Color(0xFF1976D2);
-    final contentColor = Colors.white;
+    // Force dark theme background for splash screen
+    // final isDark = Theme.of(context).brightness == Brightness.dark; // OLD: theme-aware
+    // final backgroundColor = isDark ? const Color(0xFF121212) : const Color(0xFF1976D2); // OLD
+    const backgroundColor = Color(0xFF121212); // NEW: always dark
+    const contentColor = Colors.white;
 
     return Scaffold(
       backgroundColor: backgroundColor,
