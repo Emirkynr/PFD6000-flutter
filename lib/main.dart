@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'ui/scanner_page.dart';
-import 'ui/splash_screen.dart'; // Import Splash
+import 'ui/splash_screen.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
 
@@ -34,7 +34,7 @@ class _MyAppState extends State<MyApp> {
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: _themeProvider.themeMode,
-          home: const SplashScreen(), // Update home to SplashScreen
+          home: const SplashScreen(),
         );
       },
     );

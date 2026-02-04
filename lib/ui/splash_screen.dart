@@ -22,7 +22,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 2),
+      duration: const Duration(milliseconds: 3000), // 3 second animation
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -34,8 +34,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
 
     _controller.forward().then((_) {
-       // Wait a bit more after animation finishes
-       Future.delayed(const Duration(milliseconds: 500), () {
+       // Add 1 second delay after animation for total 4 seconds
+       Future.delayed(const Duration(milliseconds: 1000), () {
          _navigateToHome();
        });
     });
@@ -62,7 +62,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             child: child, // Or SlideTransition if preferred, but Fade is smoother for top-level replacement
           );
         },
-        transitionDuration: const Duration(milliseconds: 800),
+        transitionDuration: const Duration(milliseconds: 300), // Reduced from 800ms
       ),
     );
   }
