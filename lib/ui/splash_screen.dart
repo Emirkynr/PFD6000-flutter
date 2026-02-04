@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'scanner_page.dart';
+import '../ble/ble_manager.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -13,12 +14,15 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
+  BleManager? _bleManager; // BLE manager for pre-scanning
 
   @override
   void initState() {
     super.initState();
-    // Hide status bar and navigation bar for full screen splash
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+
+    // Start BLE pre-scanning to warm up device discovery
+    _bleManager = BleManager();
+    _bleManager!.startScan();
 
     _controller = AnimationController(
       vsync: this,
@@ -42,9 +46,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   void _navigateToHome() {
-    // Restore system UI
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
-    
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) => const ScannerPage(),
@@ -70,6 +71,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void dispose() {
     _controller.dispose();
+    _bleManager?.stopScan(); // Stop pre-scan before disposal
     super.dispose();
   }
 
