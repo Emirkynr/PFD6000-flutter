@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../main.dart';
 
 class MessageSettingsDrawer extends StatefulWidget {
   const MessageSettingsDrawer({super.key});
@@ -52,44 +53,16 @@ class _MessageSettingsDrawerState extends State<MessageSettingsDrawer> {
       child: SafeArea(
         child: Column(
           children: [
-            // Modern Header
+            // Modern Header with ENKA Logo
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    colorScheme.primary,
-                    colorScheme.primary.withOpacity(0.8),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+              height: 200, // Fixed height for the header image
+              decoration: const BoxDecoration(
+                color: Color(0xFF002A5C), // ENKA Blue
+                image: DecorationImage(
+                  image: AssetImage('assets/images/enka_logo.png'),
+                  fit: BoxFit.cover,
                 ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.credit_card,
-                    size: 48,
-                    color: colorScheme.onPrimary,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Kart Bilgileri',
-                    style: textTheme.headlineSmall?.copyWith(
-                      color: colorScheme.onPrimary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Konfigüre edilmiş kart detayları',
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onPrimary.withOpacity(0.9),
-                    ),
-                  ),
-                ],
               ),
             ),
 
@@ -131,6 +104,40 @@ class _MessageSettingsDrawerState extends State<MessageSettingsDrawer> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Theme Settings Section
+                    _buildSectionTitle(
+                      context,
+                      icon: Icons.brightness_6,
+                      title: 'Görünüm',
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: colorScheme.secondaryContainer.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: colorScheme.outline.withOpacity(0.2),
+                        ),
+                      ),
+                      child: SwitchListTile(
+                        title: const Text('Karanlık Tema'),
+                        secondary: Icon(
+                          Theme.of(context).brightness == Brightness.dark
+                              ? Icons.dark_mode
+                              : Icons.light_mode,
+                          color: colorScheme.primary,
+                        ),
+                        value: Theme.of(context).brightness == Brightness.dark,
+                        onChanged: (value) {
+                          MyApp.of(context).toggleTheme();
+                        },
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                     ),

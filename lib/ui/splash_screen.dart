@@ -104,6 +104,16 @@ class _SplashScreenState extends State<SplashScreen>
                 },
                 child: _showFirstLogo
                     ? ClipRRect(
+                        key: const ValueKey('enka'),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.asset(
+                          'assets/images/enka_full_logo.png',
+                          width: 300,
+                          height: 120,
+                          fit: BoxFit.contain,
+                        ),
+                      )
+                    : ClipRRect(
                         key: const ValueKey('politeknik'),
                         borderRadius: BorderRadius.circular(16),
                         child: Container(
@@ -116,16 +126,6 @@ class _SplashScreenState extends State<SplashScreen>
                             height: 80,
                             fit: BoxFit.contain,
                           ),
-                        ),
-                      )
-                    : ClipRRect(
-                        key: const ValueKey('enka'),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Image.asset(
-                          'assets/images/enka_logo.png',
-                          width: 200,
-                          height: 80,
-                          fit: BoxFit.contain,
                         ),
                       ),
               ),

@@ -13,7 +13,6 @@ import 'scanner/managers/message_sender.dart';
 import 'scanner/managers/card_config_handler.dart';
 import 'scanner/managers/card_config_handler.dart';
 import 'message_log_page.dart';
-import '../main.dart';
 import '../theme/theme_provider.dart';
 
 /// Ana tarayıcı sayfası - BLE cihaz tarama ve mesaj gönderme
@@ -435,27 +434,21 @@ class _ScannerPageState extends State<ScannerPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("ENKA GS",
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        // Remove hardcoded colors to use Theme
-        // backgroundColor: const Color(0xFF1976D2),
-        // foregroundColor: Colors.white,
+        title: const Text(
+          "ENKA",
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 24,
+            letterSpacing: 1.5,
+          ),
+        ),
+        centerTitle: true,
         leading: Builder(
           builder: (context) => IconButton(
             icon: const Icon(Icons.menu),
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
-        actions: [
-          // Theme Toggle Button
-          IconButton(
-            icon: const Icon(Icons.brightness_medium_outlined),
-            tooltip: 'Temayı Değiştir',
-            onPressed: () {
-              MyApp.of(context).toggleTheme();
-            },
-          ),
-        ],
       ),
       drawer: const Drawer(
         child: MessageSettingsDrawer(),
