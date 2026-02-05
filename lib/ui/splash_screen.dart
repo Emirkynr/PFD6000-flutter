@@ -96,20 +96,21 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Icon
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.bluetooth_audio, // Or bluetooth_connected
-                        size: 80,
-                        color: contentColor,
+                    // Logo with rounded corners
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), // Minimal vertical padding
+                        color: Colors.white,
+                        child: Image.asset(
+                          'assets/images/logo.png',
+                          width: 200,
+                          height: 80,
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 32),
                     // Title
                     Text(
                       'POLITEKNIK BGS',
