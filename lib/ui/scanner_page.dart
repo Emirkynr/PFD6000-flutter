@@ -435,7 +435,7 @@ class _ScannerPageState extends State<ScannerPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("POLITEKNIK BGS",
+        title: const Text("ENKA GS",
             style: TextStyle(fontWeight: FontWeight.bold)),
         // Remove hardcoded colors to use Theme
         // backgroundColor: const Color(0xFF1976D2),

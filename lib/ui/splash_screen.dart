@@ -10,11 +10,11 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _fadeAnimation;
-  late Animation<double> _scaleAnimation;
   BleManager? _bleManager; // BLE manager for pre-scanning
+  bool _showFirstLogo = true; // Control which logo to show
 
   @override
   void initState() {
@@ -26,44 +26,35 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2000), // 2 second animation
+      duration: const Duration(milliseconds: 1500), // Each logo fades for 1.5s
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
-    );
-
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
-    );
-
+    // Start with first logo fade in
     _controller.forward().then((_) {
-       // Add 1 second delay after animation for total 3 seconds
-       Future.delayed(const Duration(milliseconds: 1000), () {
-         _navigateToHome();
-       });
+      // After 1.5s, switch to second logo
+      setState(() {
+        _showFirstLogo = false;
+      });
+      _controller.reset();
+      _controller.forward().then((_) {
+        // After second logo (total 3 seconds), navigate
+        _navigateToHome();
+      });
     });
   }
 
   void _navigateToHome() {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => const ScannerPage(),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const ScannerPage(),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          const begin = Offset(0.0, 1.0); // Slide from bottom
-          const end = Offset.zero; // To center
-          const curve = Curves.easeInOut;
-
-          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-          var offsetAnimation = animation.drive(tween);
-
-          // You can combine with Fade
           return FadeTransition(
             opacity: animation,
-            child: child, // Or SlideTransition if preferred, but Fade is smoother for top-level replacement
+            child: child,
           );
         },
-        transitionDuration: const Duration(milliseconds: 300), // Reduced from 800ms
+        transitionDuration: const Duration(milliseconds: 300),
       ),
     );
   }
@@ -77,65 +68,100 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    // Force dark theme background for splash screen
-    // final isDark = Theme.of(context).brightness == Brightness.dark; // OLD: theme-aware
-    // final backgroundColor = isDark ? const Color(0xFF121212) : const Color(0xFF1976D2); // OLD
-    const backgroundColor = Color(0xFF121212); // NEW: always dark
+    // Set status bar style
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+      ),
+    );
+
+    // Dark theme background
+    const backgroundColor = Color(0xFF121212);
     const contentColor = Colors.white;
 
     return Scaffold(
       backgroundColor: backgroundColor,
       body: Center(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            return FadeTransition(
-              opacity: _fadeAnimation,
-              child: ScaleTransition(
-                scale: _scaleAnimation,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Logo with rounded corners
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), // Minimal vertical padding
-                        color: Colors.white,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Sequential Logo with Fade Animation
+            SizedBox(
+              width: 200,
+              height: 100,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 500),
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: 0.9, end: 1.0)
+                          .animate(animation),
+                      child: child,
+                    ),
+                  );
+                },
+                child: _showFirstLogo
+                    ? ClipRRect(
+                        key: const ValueKey('politeknik'),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          color: Colors.white,
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            width: 200,
+                            height: 80,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      )
+                    : ClipRRect(
+                        key: const ValueKey('enka'),
+                        borderRadius: BorderRadius.circular(16),
                         child: Image.asset(
-                          'assets/images/logo.png',
+                          'assets/images/enka_logo.png',
                           width: 200,
                           height: 80,
                           fit: BoxFit.contain,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 32),
-                    // Title
-                    Text(
-                      'POLITEKNIK BGS',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: contentColor,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    // Subtitle
-                    Text(
-                      'Bluetooth Geçiş Sistemi',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: contentColor.withOpacity(0.8),
-                        letterSpacing: 1.1,
-                      ),
-                    ),
-                  ],
-                ),
               ),
-            );
-          },
+            ),
+            const SizedBox(height: 48),
+            // Fixed Title
+            const Text(
+              'ENKA GS',
+              style: TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                color: contentColor,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Fixed Subtitle
+            Text(
+              'POLITEKNIK - ENKA',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: contentColor.withOpacity(0.8),
+                letterSpacing: 1.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Subtitle
+            Text(
+              'Bluetooth Geçiş Sistemi',
+              style: TextStyle(
+                fontSize: 14,
+                color: contentColor.withOpacity(0.8),
+              ),
+            ),
+          ],
         ),
       ),
     );
