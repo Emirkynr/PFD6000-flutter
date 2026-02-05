@@ -150,7 +150,8 @@ class DeviceListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     // Raw data'dan cihaz adını çıkar
     final deviceName = DeviceFilter.extractDeviceName(device);
-    final manufacturerString = _getManufacturerDataString(device.manufacturerData);
+    final manufacturerString =
+        _getManufacturerDataString(device.manufacturerData);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -160,9 +161,12 @@ class DeviceListTile extends StatelessWidget {
           ListTile(
             leading: Icon(
               isConnected ? Icons.bluetooth_connected : Icons.bluetooth,
-              color: isConnected ? Colors.green : Theme.of(context).colorScheme.primary,
+              color: isConnected
+                  ? Colors.green
+                  : Theme.of(context).colorScheme.primary,
             ),
-            title: Text(deviceName, style: const TextStyle(fontWeight: FontWeight.bold)),
+            title: Text(deviceName,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -170,64 +174,60 @@ class DeviceListTile extends StatelessWidget {
                 Text('RSSI: ${device.rssi} dBm'),
                 if (manufacturerString != 'N/A') ...[
 //                  Text('Manufacturer Code: ${_getManufacturerCode(device.manufacturerData)}'),
-                  Text('Raw Data (HEX): ${_getRawDataHex(device.manufacturerData)}'),
+                  Text(
+                      'Raw Data (HEX): ${_getRawDataHex(device.manufacturerData)}'),
 //                  Text('Raw Data (Bytes): ${_getRawDataBytes(device.manufacturerData)}'),
-                  Text('Data Length: ${_getDataLength(device.manufacturerData)} bytes'),
+                  Text(
+                      'Data Length: ${_getDataLength(device.manufacturerData)} bytes'),
                 ],
               ],
             ),
             trailing: Text(isConnected ? 'CONNECTED' : 'READY'),
           ),
+          // V2: Only Entry button, renamed to "GİRİŞ YAP"
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: buttonsDisabled ? null : onEntry,
-                    icon: const Icon(Icons.login),
-                    label: const Text('Entry'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: buttonsDisabled ? null : onExit,
-                    icon: const Icon(Icons.logout),
-                    label: const Text('Exit'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: SizedBox(
               width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: onTest,
-                icon: const Icon(Icons.analytics_outlined),
-                label: const Text('Raw Data Test'),
+              child: FilledButton.icon(
+                onPressed: buttonsDisabled ? null : onEntry,
+                icon: const Icon(Icons.login),
+                label: const Text('GİRİŞ YAP',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
               ),
             ),
           ),
+          // V2: Renamed "Kart Konfigürasyonu" to "YENİ KART EKLE"
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: SizedBox(
               width: double.infinity,
-              child: ElevatedButton.icon(
+              child: FilledButton.tonalIcon(
                 onPressed: buttonsDisabled ? null : onCardConfig,
-                icon: const Icon(Icons.credit_card),
-                label: const Text('Kart Konfigürasyonu'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
+                icon: const Icon(Icons.add_card),
+                label: const Text('YENİ KART EKLE',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                style: FilledButton.styleFrom(
+                  backgroundColor:
+                      Theme.of(context).colorScheme.secondaryContainer,
+                  foregroundColor:
+                      Theme.of(context).colorScheme.onSecondaryContainer,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ),
           ),
+          // V2: Exit button removed
+          // V2: Raw Data Test button removed
         ],
       ),
     );

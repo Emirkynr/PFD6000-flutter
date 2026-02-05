@@ -192,33 +192,7 @@ class _MessageSettingsDrawerState extends State<MessageSettingsDrawer> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  Icons.contactless,
-                  size: 20,
-                  color: colorScheme.onPrimaryContainer,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Notify ile Gelen',
-                  style: textTheme.labelLarge?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+          // V2: Removed "Notify ile Gelen" label
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
@@ -252,11 +226,12 @@ class _MessageSettingsDrawerState extends State<MessageSettingsDrawer> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
+    // V2: Updated info items
     final infoItems = [
-      'Bu kart numarası "Kart Konfigürasyonu" butonu ile alınmıştır',
-      'Notify ile BLE cihazından gelen kart numarasıdır',
+      'Yeni kart tanımlamak için "Yeni Kart Ekle" butonuna basınız',
+      'Kart numarası BLE cihazından alınır',
       'Giriş/Çıkış işlemlerinde bu numara kullanılacaktır',
-      'Her yeni kart numarası öncekileri siler',
+      'Yalnızca bir kart kayıtlı olabilir, eski kartlar kayıtlı tutulmaz',
     ];
 
     return Container(

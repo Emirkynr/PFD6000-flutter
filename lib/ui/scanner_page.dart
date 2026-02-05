@@ -56,7 +56,8 @@ class _ScannerPageState extends State<ScannerPage> {
 
     // BLE cihaz taramasını dinle ve raw data 0x50 0x54 ile filtrele
     _bleManager.devicesStream.listen((list) {
-      final filtered = list.where((device) => DeviceFilter.hasRawData5054(device)).toList();
+      final filtered =
+          list.where((device) => DeviceFilter.hasRawData5054(device)).toList();
       setState(() => devices = filtered);
     });
 
@@ -112,18 +113,28 @@ class _ScannerPageState extends State<ScannerPage> {
     print('Find Device');
     // Device'ı bul
     final device = devices.firstWhere((d) => d.id == deviceId);
-    
+
     // Kayıtlı kart numarasını al
     print('Find Card');
     final cardBytes = await CardManager.getConfiguredCardNumber();
     if (cardBytes.isEmpty) return;
 
     final messageInfo = MessageSender.getEntryMessageInfo(cardBytes);
-    
-    // Kullanıcıya onay sor
-    final confirmed = await _showEntryMessageDialog(messageInfo, cardBytes);
-    if (confirmed != true) return;
-    print('Confirmed');
+
+    // V2: No confirmation dialog - show immediate feedback
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 2),
+          content: const Text('Giriş işlemi başlatıldı...'),
+          backgroundColor: Colors.blue.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+    print('Starting Entry Process');
 
     try {
       // Cihaza bağlan
@@ -157,16 +168,16 @@ class _ScannerPageState extends State<ScannerPage> {
   /// Mesaj formatı: [komut 16 byte] + [kart 16/32 byte] + [flag 0x01] + [şifre 8 byte]
   Future<void> _sendExitMessage(String deviceId) async {
     if (_buttonsDisabled) return;
-    
+
     // Device'ı bul
     final device = devices.firstWhere((d) => d.id == deviceId);
-    
+
     // Kayıtlı kart numarasını al
     final cardBytes = await CardManager.getConfiguredCardNumber();
     if (cardBytes.isEmpty) return;
 
     final messageInfo = MessageSender.getExitMessageInfo(cardBytes);
-    
+
     // Kullanıcıya onay sor
     final confirmed = await _showExitMessageDialog(messageInfo);
     if (confirmed != true) return;
@@ -201,12 +212,17 @@ class _ScannerPageState extends State<ScannerPage> {
       await _connectionManager.connectToDevice(deviceId);
       await Future.delayed(const Duration(milliseconds: 500));
 
+      // V2: Enhanced SnackBar feedback
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            duration: Duration(seconds: 3),
-            content: Text('Kart konfigürasyonu başlatılıyor... Lütfen kartı okuyucuya yaklaştırın'),
-            backgroundColor: Colors.orange,
+          SnackBar(
+            duration: const Duration(seconds: 3),
+            content: const Text(
+                'Kart konfigürasyonu başlatılıyor... Lütfen kartı okuyucuya yaklaştırın'),
+            backgroundColor: Colors.orange.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
       }
@@ -218,12 +234,13 @@ class _ScannerPageState extends State<ScannerPage> {
         onCardReceived: (cardBytes) async {
           await CardManager.saveCardToConfig(cardBytes);
           final displayString = CardManager.bytesToHexString(cardBytes);
-          
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 duration: const Duration(seconds: 3),
-                content: Text('Kart numarası kaydedildi (${cardBytes.length} byte):\n$displayString'),
+                content: Text(
+                    'Kart numarası kaydedildi (${cardBytes.length} byte):\n$displayString'),
                 backgroundColor: Colors.green,
               ),
             );
@@ -252,7 +269,8 @@ class _ScannerPageState extends State<ScannerPage> {
 
   /// Giriş mesajı onay dialogu
   /// Mesaj detaylarını gösterir: komut, kart, flag, şifre, toplam byte
-  Future<bool?> _showEntryMessageDialog(Map<String, dynamic> info, List<int> cardBytes) {
+  Future<bool?> _showEntryMessageDialog(
+      Map<String, dynamic> info, List<int> cardBytes) {
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -261,19 +279,25 @@ class _ScannerPageState extends State<ScannerPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Gönderilecek mesaj:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('Gönderilecek mesaj:',
+                style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             const Text('Komut: 16 byte'),
-            Text('  ${info['commandHex']}', style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+            Text('  ${info['commandHex']}',
+                style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
             const SizedBox(height: 4),
             Text('Kart: ${info['cardLength']} byte'),
-            Text('  ${info['cardString']}', style: const TextStyle(fontSize: 11)),
+            Text('  ${info['cardString']}',
+                style: const TextStyle(fontSize: 11)),
             const SizedBox(height: 4),
-            const Text('Flag: 0x00 (Giriş)', style: TextStyle(fontSize: 11, color: Colors.blue)),
+            const Text('Flag: 0x00 (Giriş)',
+                style: TextStyle(fontSize: 11, color: Colors.blue)),
             const SizedBox(height: 4),
-            const Text('Şifre: 8 byte', style: TextStyle(fontSize: 11, color: Colors.purple)),
+            const Text('Şifre: 8 byte',
+                style: TextStyle(fontSize: 11, color: Colors.purple)),
             const SizedBox(height: 4),
-            Text('Toplam: ${info['totalBytes'] + 8} byte', style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text('Toplam: ${info['totalBytes'] + 8} byte',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             const Text('Mesajı göndermek istiyor musunuz?'),
           ],
@@ -303,18 +327,24 @@ class _ScannerPageState extends State<ScannerPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Gönderilecek mesaj:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('Gönderilecek mesaj:',
+                style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             const Text('Komut: 16 byte'),
             const SizedBox(height: 4),
-            Text('Kart: ${info['cardHex']}', style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
-            Text('  STR: ${info['cardString']}', style: const TextStyle(fontSize: 11)),
+            Text('Kart: ${info['cardHex']}',
+                style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+            Text('  STR: ${info['cardString']}',
+                style: const TextStyle(fontSize: 11)),
             const SizedBox(height: 4),
-            const Text('Flag: 0x01 (Çıkış)', style: TextStyle(fontSize: 11, color: Colors.orange)),
+            const Text('Flag: 0x01 (Çıkış)',
+                style: TextStyle(fontSize: 11, color: Colors.orange)),
             const SizedBox(height: 4),
-            const Text('Şifre: 8 byte', style: TextStyle(fontSize: 11, color: Colors.purple)),
+            const Text('Şifre: 8 byte',
+                style: TextStyle(fontSize: 11, color: Colors.purple)),
             const SizedBox(height: 4),
-            Text('Toplam: ${info['totalBytes'] + 8 + 16} byte', style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text('Toplam: ${info['totalBytes'] + 8 + 16} byte',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             const Text('Mesajı göndermek istiyor musunuz?'),
           ],
@@ -402,12 +432,13 @@ class _ScannerPageState extends State<ScannerPage> {
     // Import MyApp for theme toggling
     // Note: Assuming MyApp is in main.dart which is usually imported or available.
     // If not, we might need to add the import line at top.
-    
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("POLITEKNIK BGS", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("POLITEKNIK BGS",
+            style: TextStyle(fontWeight: FontWeight.bold)),
         // Remove hardcoded colors to use Theme
-        // backgroundColor: const Color(0xFF1976D2), 
+        // backgroundColor: const Color(0xFF1976D2),
         // foregroundColor: Colors.white,
         leading: Builder(
           builder: (context) => IconButton(
@@ -421,8 +452,8 @@ class _ScannerPageState extends State<ScannerPage> {
             icon: const Icon(Icons.brightness_medium_outlined),
             tooltip: 'Temayı Değiştir',
             onPressed: () {
-               MyApp.of(context).toggleTheme();
-            }, 
+              MyApp.of(context).toggleTheme();
+            },
           ),
         ],
       ),
