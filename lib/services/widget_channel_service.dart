@@ -108,4 +108,13 @@ class WidgetChannelService {
       print('Failed to save door config: ${e.message}');
     }
   }
+
+  /// Tell Android to finish the widget activity (close the app after config)
+  Future<void> finishWidgetActivity() async {
+    try {
+      await _channel.invokeMethod('finishActivity');
+    } on PlatformException catch (e) {
+      print('Failed to finish activity: ${e.message}');
+    }
+  }
 }

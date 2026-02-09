@@ -49,8 +49,9 @@ class _WidgetDoorPickerPageState extends State<WidgetDoorPickerPage> {
       }
     });
 
-    // Start scanning (manufacturer ID 0 uses existing Politeknik filter)
-    _bleManager.startScan(manufacturerId: 0);
+    // Start scanning - NO manufacturerId param to use default Politeknik filter
+    // BleManager already filters for [80,84] (PT) manufacturer data
+    _bleManager.startScan();
 
     // Auto stop after 10 seconds
     Future.delayed(const Duration(seconds: 10), () {
@@ -87,6 +88,9 @@ class _WidgetDoorPickerPageState extends State<WidgetDoorPickerPage> {
       // Use device ID as identifier (unique per device)
       final doorIdentifier = device.id;
 
+      debugPrint(
+          'WidgetDoorPicker: Saving widgetId=${widget.widgetId} door=$doorName id=$doorIdentifier');
+
       // Save to Android via MethodChannel
       await WidgetChannelService().saveDoorConfig(
         widget.widgetId,
@@ -95,19 +99,23 @@ class _WidgetDoorPickerPageState extends State<WidgetDoorPickerPage> {
       );
 
       if (mounted) {
-        // Show success and close
+        // Show success toast
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$doorName widget\'a kaydedildi'),
             backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 1),
           ),
         );
 
-        // Pop back to home screen
-        Navigator.of(context).pop(true);
+        // Wait a moment for toast to show, then close activity
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        // Tell Android to finish the activity (not just pop Flutter nav)
+        await WidgetChannelService().finishWidgetActivity();
       }
     } catch (e) {
+      debugPrint('WidgetDoorPicker: Error saving: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

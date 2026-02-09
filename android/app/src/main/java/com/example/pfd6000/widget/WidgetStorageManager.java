@@ -2,6 +2,7 @@ package com.example.pfd6000.widget;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.util.Log;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -10,6 +11,7 @@ import org.json.JSONObject;
  * Uses SharedPreferences with versioned JSON format
  */
 public class WidgetStorageManager {
+    private static final String TAG = "WIDGET_STORAGE";
     private static final String PREFS_NAME = "enka_gs_widgets";
     private static final String KEY_VERSION = "storage_version";
     private static final String KEY_WIDGET_PREFIX = "widget_";
@@ -34,13 +36,20 @@ public class WidgetStorageManager {
      * Save door info for a widget
      */
     public void saveDoorInfo(int widgetId, String doorName, String doorIdentifier) {
+        String key = KEY_WIDGET_PREFIX + widgetId;
+        Log.d(TAG, "saveDoorInfo: widgetId=" + widgetId + " key=" + key + " door=" + doorName);
+        
         try {
             JSONObject json = new JSONObject();
             json.put("doorName", doorName);
             json.put("doorIdentifier", doorIdentifier);
             json.put("version", CURRENT_VERSION);
-            prefs.edit().putString(KEY_WIDGET_PREFIX + widgetId, json.toString()).apply();
+            
+            prefs.edit().putString(key, json.toString()).commit(); // Use commit() for synchronous save
+            
+            Log.d(TAG, "saveDoorInfo: saved successfully to key=" + key);
         } catch (JSONException e) {
+            Log.e(TAG, "saveDoorInfo: JSON error - " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -49,16 +58,26 @@ public class WidgetStorageManager {
      * Get door info for a widget
      */
     public DoorInfo getDoorInfo(int widgetId) {
-        String json = prefs.getString(KEY_WIDGET_PREFIX + widgetId, null);
-        if (json == null) return null;
+        String key = KEY_WIDGET_PREFIX + widgetId;
+        String json = prefs.getString(key, null);
+        
+        Log.d(TAG, "getDoorInfo: widgetId=" + widgetId + " key=" + key + " found=" + (json != null));
+        
+        if (json == null) {
+            Log.d(TAG, "getDoorInfo: no data for widgetId=" + widgetId);
+            return null;
+        }
         
         try {
             JSONObject obj = new JSONObject(json);
-            return new DoorInfo(
+            DoorInfo info = new DoorInfo(
                 obj.getString("doorName"),
                 obj.getString("doorIdentifier")
             );
+            Log.d(TAG, "getDoorInfo: returning door=" + info.doorName);
+            return info;
         } catch (JSONException e) {
+            Log.e(TAG, "getDoorInfo: JSON parse error - " + e.getMessage());
             e.printStackTrace();
             return null;
         }
@@ -68,7 +87,9 @@ public class WidgetStorageManager {
      * Remove door info when widget is deleted
      */
     public void removeDoorInfo(int widgetId) {
-        prefs.edit().remove(KEY_WIDGET_PREFIX + widgetId).apply();
+        String key = KEY_WIDGET_PREFIX + widgetId;
+        Log.d(TAG, "removeDoorInfo: widgetId=" + widgetId + " key=" + key);
+        prefs.edit().remove(key).apply();
     }
     
     /**

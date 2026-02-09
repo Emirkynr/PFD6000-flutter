@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetProvider;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.util.Log;
 import android.widget.RemoteViews;
 
 import com.example.pfd6000.R;
@@ -14,15 +15,19 @@ import com.example.pfd6000.R;
  * Quick action button for door entry
  */
 public class DoorWidget1x1 extends AppWidgetProvider {
+    private static final String TAG = "WIDGET_1x1";
 
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
+        Log.d(TAG, "onUpdate: widgetCount=" + appWidgetIds.length);
         for (int appWidgetId : appWidgetIds) {
             updateAppWidget(context, appWidgetManager, appWidgetId);
         }
     }
 
     public static void updateAppWidget(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
+        Log.d(TAG, "updateAppWidget: widgetId=" + appWidgetId);
+        
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_door_1x1);
         
         // Get stored door info
@@ -31,9 +36,11 @@ public class DoorWidget1x1 extends AppWidgetProvider {
         
         if (doorInfo != null) {
             // Door is configured - show door icon
+            Log.d(TAG, "updateAppWidget: configured door=" + doorInfo.doorName);
             views.setImageViewResource(R.id.widget_icon, R.drawable.ic_door_configured);
         } else {
             // Not configured - show add icon
+            Log.d(TAG, "updateAppWidget: NOT configured");
             views.setImageViewResource(R.id.widget_icon, R.drawable.ic_door_unconfigured);
         }
         
@@ -53,6 +60,7 @@ public class DoorWidget1x1 extends AppWidgetProvider {
         views.setOnClickPendingIntent(R.id.widget_container, pendingIntent);
         
         appWidgetManager.updateAppWidget(appWidgetId, views);
+        Log.d(TAG, "updateAppWidget: complete for widgetId=" + appWidgetId);
     }
 
     @Override
