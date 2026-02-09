@@ -43,8 +43,9 @@ class WidgetDoorOpener {
       }
     });
 
-    // Start scan
-    _bleManager.startScan(manufacturerId: 0);
+    // Start scan - use default Politeknik filter (no manufacturerId)
+    debugPrint('WidgetDoorOpener: Starting BLE scan...');
+    _bleManager.startScan();
 
     // Set timeout
     _timeoutTimer = Timer(Duration(seconds: _scanTimeoutSeconds), () {
