@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ENKA GS</string>
+    <string name="widget_1x4_description">ENKA kapi giris widgeti (genis)</string>
+    <string name="widget_1x1_description">ENKA kapi giris widgeti (kompakt)</string>
+</resources>

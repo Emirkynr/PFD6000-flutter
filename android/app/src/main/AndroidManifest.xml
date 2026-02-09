@@ -38,5 +38,39 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        
+        <!-- 1x4 Door Widget -->
+        <receiver
+            android:name=".widget.DoorWidget1x4"
+            android:exported="true"
+            android:label="ENKA Kapı (Geniş)">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_door_1x4_info" />
+        </receiver>
+        
+        <!-- 1x1 Door Widget -->
+        <receiver
+            android:name=".widget.DoorWidget1x1"
+            android:exported="true"
+            android:label="ENKA Kapı (Kompakt)">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_door_1x1_info" />
+        </receiver>
+        
+        <!-- Widget Action Activity (transparent) -->
+        <activity
+            android:name=".widget.WidgetActionActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true" />
     </application>
 </manifest>
