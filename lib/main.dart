@@ -5,7 +5,6 @@ import 'ui/widget_config/widget_door_picker_page.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
 import 'services/widget_channel_service.dart';
-import 'services/widget_door_opener.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,15 +36,6 @@ class _MyAppState extends State<MyApp> {
 
   void _initWidgetChannel() {
     _widgetChannelService.init(
-      onOpenDoor: (widgetId, doorIdentifier, doorName) async {
-        // Handle door open request from widget
-        final opener = WidgetDoorOpener();
-        final success = await opener.openDoor(doorIdentifier);
-        if (!success) {
-          await _widgetChannelService.showNotFound(widgetId);
-        }
-        await opener.dispose();
-      },
       onConfigureDoor: (widgetId, widgetType) {
         // Navigate to door picker
         _navigatorKey.currentState?.push(

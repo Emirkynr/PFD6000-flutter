@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'gate_entry_service.dart';
 
 /// Service for Flutter <-> Android Widget communication
 /// Handles openDoor, configureDoor, and widget state queries
@@ -7,8 +9,7 @@ class WidgetChannelService {
   static const String _channelName = 'enka_gs_widget';
   static final MethodChannel _channel = MethodChannel(_channelName);
 
-  // Callback handlers
-  Function(int widgetId, String doorIdentifier, String doorName)? onOpenDoor;
+  // Callback for configuration flow (needs Navigator)
   Function(int widgetId, String? widgetType)? onConfigureDoor;
 
   // Singleton pattern
@@ -18,50 +19,35 @@ class WidgetChannelService {
 
   WidgetChannelService._internal() {
     _channel.setMethodCallHandler(_handleMethodCall);
+    debugPrint('WidgetChannelService: Handler registered');
   }
 
   /// Initialize the service - call from main.dart
   void init({
-    required Function(int widgetId, String doorIdentifier, String doorName)
-        onOpenDoor,
     required Function(int widgetId, String? widgetType) onConfigureDoor,
   }) {
-    this.onOpenDoor = onOpenDoor;
     this.onConfigureDoor = onConfigureDoor;
+    debugPrint('WidgetChannelService: Initialized with callbacks');
   }
 
   /// Handle incoming calls from Android
   Future<dynamic> _handleMethodCall(MethodCall call) async {
+    debugPrint('WidgetChannelService: Received method call: ${call.method}');
+
     switch (call.method) {
       case 'openDoor':
-        final args = Map<String, dynamic>.from(call.arguments);
-        final widgetId = args['widgetId'] as int;
-        final doorIdentifier = args['doorIdentifier'] as String;
-        final doorName = args['doorName'] as String;
-
-        if (onOpenDoor != null) {
-          // Return bool indicating success
-          try {
-            onOpenDoor!(widgetId, doorIdentifier, doorName);
-            return true;
-          } catch (e) {
-            return false;
-          }
-        }
-        return false;
+        return await _handleOpenDoor(call);
 
       case 'configureDoor':
         final args = Map<String, dynamic>.from(call.arguments);
         final widgetId = args['widgetId'] as int;
         final widgetType = args['widgetType'] as String?;
-
+        debugPrint('WidgetChannelService: configureDoor widgetId=$widgetId');
         onConfigureDoor?.call(widgetId, widgetType);
         return null;
 
       case 'getWidgetState':
         final widgetId = call.arguments as int;
-        // Return stored door info if available
-        // This will be implemented when we have a local widget store
         return null;
 
       default:
@@ -69,6 +55,40 @@ class WidgetChannelService {
           code: 'NOT_IMPLEMENTED',
           message: 'Method ${call.method} not implemented',
         );
+    }
+  }
+
+  /// Handle openDoor - uses GateEntryService for actual BLE work
+  /// Returns TRUE only after BLE command is ACTUALLY sent
+  Future<bool> _handleOpenDoor(MethodCall call) async {
+    final args = Map<String, dynamic>.from(call.arguments);
+    final widgetId = args['widgetId'] as int;
+    final doorIdentifier = args['doorIdentifier'] as String;
+    final doorName = args['doorName'] as String;
+
+    debugPrint('WidgetChannelService: openDoor START');
+    debugPrint('  widgetId: $widgetId');
+    debugPrint('  doorIdentifier: $doorIdentifier');
+    debugPrint('  doorName: $doorName');
+
+    try {
+      // Use GateEntryService for actual BLE work
+      final service = GateEntryService();
+      final result = await service.enterGate(doorIdentifier);
+
+      debugPrint('WidgetChannelService: openDoor RESULT');
+      debugPrint('  success: ${result.success}');
+      debugPrint('  reason: ${result.reason}');
+      debugPrint('  message: ${result.message}');
+
+      // Cleanup
+      await service.dispose();
+
+      // Return actual success status
+      return result.success;
+    } catch (e) {
+      debugPrint('WidgetChannelService: openDoor ERROR: $e');
+      return false;
     }
   }
 
@@ -80,7 +100,7 @@ class WidgetChannelService {
         'doorName': doorName,
       });
     } on PlatformException catch (e) {
-      print('Failed to update widget: ${e.message}');
+      debugPrint('Failed to update widget: ${e.message}');
     }
   }
 
@@ -91,7 +111,7 @@ class WidgetChannelService {
         'widgetId': widgetId,
       });
     } on PlatformException catch (e) {
-      print('Failed to show not found: ${e.message}');
+      debugPrint('Failed to show not found: ${e.message}');
     }
   }
 
@@ -105,7 +125,7 @@ class WidgetChannelService {
         'doorIdentifier': doorIdentifier,
       });
     } on PlatformException catch (e) {
-      print('Failed to save door config: ${e.message}');
+      debugPrint('Failed to save door config: ${e.message}');
     }
   }
 
@@ -114,7 +134,7 @@ class WidgetChannelService {
     try {
       await _channel.invokeMethod('finishActivity');
     } on PlatformException catch (e) {
-      print('Failed to finish activity: ${e.message}');
+      debugPrint('Failed to finish activity: ${e.message}');
     }
   }
 }
