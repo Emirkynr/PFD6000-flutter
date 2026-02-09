@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 1x1 Widget: Square with ENKA watermark + door icon -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_container"
     android:layout_width="match_parent"
@@ -6,12 +7,14 @@
     android:padding="4dp"
     android:background="@drawable/widget_background_1x1">
 
+    <!-- Door icon - tinted based on configuration state -->
     <ImageView
         android:id="@+id/widget_icon"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:src="@drawable/ic_door_unconfigured"
+        android:src="@drawable/ic_door"
         android:scaleType="centerInside"
+        android:padding="8dp"
         android:contentDescription="Door widget" />
 
 </FrameLayout>

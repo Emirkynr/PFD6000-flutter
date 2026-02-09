@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simple door icon - tintable via setColorFilter -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <!-- Door frame -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M19,19V5c0,-1.1 -0.9,-2 -2,-2H7C5.9,3 5,3.9 5,5v14H3v2h18v-2H19zM17,19H7V5h10V19z" />
+    <!-- Door handle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M15.5,11c0,0.83 -0.67,1.5 -1.5,1.5s-1.5,-0.67 -1.5,-1.5s0.67,-1.5 1.5,-1.5S15.5,10.17 15.5,11z" />
+</vector>

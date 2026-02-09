@@ -34,14 +34,19 @@ public class DoorWidget1x4 extends AppWidgetProvider {
         WidgetStorageManager storage = new WidgetStorageManager(context);
         WidgetStorageManager.DoorInfo doorInfo = storage.getDoorInfo(appWidgetId);
         
+        // Set door icon with color tint based on configuration state
+        views.setImageViewResource(R.id.widget_door_icon, R.drawable.ic_door);
+        
         if (doorInfo != null) {
-            // Door is configured
+            // Door is configured: WHITE icon + door name
             Log.d(TAG, "updateAppWidget: configured door=" + doorInfo.doorName);
+            views.setInt(R.id.widget_door_icon, "setColorFilter", 0xFFFFFFFF); // White
             views.setTextViewText(R.id.widget_door_name, doorInfo.doorName);
             views.setTextViewText(R.id.widget_action_text, "Giriş yapmak için dokun");
         } else {
-            // Not configured yet
+            // Not configured: RED icon + setup prompt
             Log.d(TAG, "updateAppWidget: NOT configured");
+            views.setInt(R.id.widget_door_icon, "setColorFilter", 0xFFE53935); // Material Red 600
             views.setTextViewText(R.id.widget_door_name, "");
             views.setTextViewText(R.id.widget_action_text, "Kapı kaydetmek için dokun");
         }
@@ -65,6 +70,7 @@ public class DoorWidget1x4 extends AppWidgetProvider {
         appWidgetManager.updateAppWidget(appWidgetId, views);
         Log.d(TAG, "updateAppWidget: complete for widgetId=" + appWidgetId);
     }
+
 
     @Override
     public void onDeleted(Context context, int[] appWidgetIds) {

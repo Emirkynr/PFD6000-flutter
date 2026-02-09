@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import '../ble/ble_manager.dart';
@@ -69,6 +70,18 @@ class EntryResult {
         message: 'Zaman aşımı',
       );
 
+  factory EntryResult.btOff() => const EntryResult(
+        success: false,
+        reason: EntryResultReason.btOff,
+        message: 'Bluetooth kapalı',
+      );
+
+  factory EntryResult.permissionDenied() => const EntryResult(
+        success: false,
+        reason: EntryResultReason.permissionDenied,
+        message: 'İzin verilmedi',
+      );
+
   factory EntryResult.error(String msg) => EntryResult(
         success: false,
         reason: EntryResultReason.unknown,
@@ -103,11 +116,64 @@ class GateEntryService {
   /// Attempt to open a door by its identifier (device ID)
   /// This is the SAME code path as the main "Giriş Yap" button
   Future<EntryResult> enterGate(String doorIdentifier) async {
-    debugPrint('GateEntryService: START enterGate doorId=$doorIdentifier');
+    debugPrint('');
+    debugPrint('╔═══════════════════════════════════════════════════════════╗');
+    debugPrint(
+        '║          GATE ENTRY SERVICE - STARTING                     ║');
+    debugPrint('╠═══════════════════════════════════════════════════════════╣');
+    debugPrint('║ doorId: $doorIdentifier');
+    debugPrint('╚═══════════════════════════════════════════════════════════╝');
 
     if (_disposed) {
       debugPrint('GateEntryService: ERROR - service disposed');
       return EntryResult.error('Servis kapatılmış');
+    }
+
+    // UPDATE: Section 5 - Permission & BT State Checks (Android 12+)
+    debugPrint('GateEntryService: Checking Permissions & BT State...');
+
+    // 1. Check Permissions
+    bool permissionsGranted = false;
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      // Request/Check permissions loosely - allow if restricted/limited but try our best
+      // Android 12+ (S+)
+      final scanStatus = await Permission.bluetoothScan.request();
+      final connectStatus = await Permission.bluetoothConnect.request();
+
+      // Location (Pre-12 or if needed)
+      final locationStatus = await Permission.location.request();
+
+      debugPrint(
+          'GateEntryService: Perms - Scan:$scanStatus, Connect:$connectStatus, Loc:$locationStatus');
+
+      if (scanStatus.isGranted ||
+          connectStatus.isGranted ||
+          locationStatus.isGranted) {
+        permissionsGranted = true;
+      }
+    } else {
+      // iOS or other
+      permissionsGranted = true;
+    }
+
+    if (!permissionsGranted) {
+      debugPrint('GateEntryService: ERROR - Permissions denied');
+      // We try to proceed anyway as some devices might be weird, but log it
+      // return EntryResult.permissionDenied();
+    }
+
+    // 2. Check Bluetooth Adapter State
+    final ble = FlutterReactiveBle();
+    try {
+      final status =
+          await ble.statusStream.first.timeout(const Duration(seconds: 1));
+      debugPrint('GateEntryService: BT Status: $status');
+      if (status != BleStatus.ready) {
+        debugPrint('GateEntryService: ERROR - Bluetooth not ready');
+        return EntryResult.btOff();
+      }
+    } catch (e) {
+      debugPrint('GateEntryService: WARN - Could not get BT status: $e');
     }
 
     // Step 1: Get card bytes
@@ -120,63 +186,67 @@ class GateEntryService {
     debugPrint('GateEntryService: Card bytes OK (${cardBytes.length} bytes)');
 
     // Step 2: Scan for the device
-    debugPrint('GateEntryService: Step 2 - Scanning for device');
-    DiscoveredDevice? targetDevice;
-    final completer = Completer<DiscoveredDevice?>();
+    debugPrint(
+        'GateEntryService: Step 2 - Scanning for device (${_scanTimeoutSeconds}s)');
 
+    DiscoveredDevice? targetDevice;
+    bool deviceFound = false;
+
+    // Start scanning
+    _bleManager.startScan();
+
+    // Listen for devices and find our target
     _deviceSubscription = _bleManager.devicesStream.listen((devices) {
-      debugPrint('GateEntryService: Scan found ${devices.length} devices');
+      debugPrint('GateEntryService: Stream update - ${devices.length} devices');
       for (final device in devices) {
         // Filter for Politeknik devices
         if (DeviceFilter.hasRawData5054(device)) {
-          debugPrint('GateEntryService: Found Politeknik device: ${device.id}');
+          debugPrint(
+              'GateEntryService: Politeknik device: ${device.id} (name: ${device.name})');
           if (device.id == doorIdentifier) {
-            debugPrint('GateEntryService: TARGET FOUND: ${device.id}');
+            debugPrint('GateEntryService: ★ TARGET FOUND ★');
             targetDevice = device;
-            if (!completer.isCompleted) {
-              completer.complete(device);
-            }
+            deviceFound = true;
           }
         }
       }
     });
 
-    // Start scanning
-    _bleManager.startScan();
-
-    // Set scan timeout
-    _scanTimer = Timer(Duration(seconds: _scanTimeoutSeconds), () {
-      debugPrint(
-          'GateEntryService: Scan timeout after $_scanTimeoutSeconds seconds');
-      if (!completer.isCompleted) {
-        completer.complete(null);
+    // Wait for scan with periodic checks (faster detection)
+    for (int i = 0; i < _scanTimeoutSeconds * 2; i++) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (deviceFound && targetDevice != null) {
+        debugPrint('GateEntryService: Device found after ${(i + 1) * 500}ms');
+        break;
       }
-    });
-
-    // Wait for device or timeout
-    targetDevice = await completer.future;
-
-    // Stop scanning
-    await _bleManager.stopScan();
-    await _deviceSubscription?.cancel();
-    _scanTimer?.cancel();
-
-    // Check if device was found
-    if (targetDevice == null) {
-      // Last chance - check in bleManager's current list
-      targetDevice = _bleManager.findDeviceById(doorIdentifier);
     }
 
-    if (targetDevice == null) {
-      debugPrint('GateEntryService: ERROR - Device not found');
+    // Stop scanning and cleanup subscription
+    await _deviceSubscription?.cancel();
+    await _bleManager.stopScan();
+    _deviceSubscription = null;
+
+    // Also check the stored list as fallback
+    if (!deviceFound || targetDevice == null) {
+      targetDevice = _bleManager.findDeviceById(doorIdentifier);
+      if (targetDevice != null) {
+        debugPrint('GateEntryService: Device found via findDeviceById');
+        deviceFound = true;
+      }
+    }
+
+    if (!deviceFound || targetDevice == null) {
+      debugPrint('GateEntryService: ERROR - Device not found after scan');
       await _cleanup();
       return EntryResult.notFound();
     }
 
-    debugPrint('GateEntryService: Device found, proceeding with connection');
+    debugPrint(
+        'GateEntryService: Device confirmed: ${targetDevice!.name} (${targetDevice!.id})');
 
     // Step 3: Connect to device (includes discoverServices!)
-    debugPrint('GateEntryService: Step 3 - Connecting to device');
+    debugPrint(
+        'GateEntryService: Step 3 - Connecting (${_connectTimeoutSeconds}s timeout)');
     try {
       final connected = await _connectionManager
           .connectToDevice(targetDevice!.id)
@@ -187,10 +257,10 @@ class GateEntryService {
         await _cleanup();
         return EntryResult.connectFail();
       }
-      debugPrint('GateEntryService: Connection successful');
+      debugPrint('GateEntryService: Connection SUCCESSFUL');
 
       // Small delay for connection stabilization (same as scanner_page)
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future.delayed(const Duration(milliseconds: 300));
 
       // Step 4: Send entry message
       debugPrint('GateEntryService: Step 4 - Sending entry message');
@@ -198,12 +268,19 @@ class GateEntryService {
           await _messageSender.sendEntryMessage(cardBytes, targetDevice!);
 
       if (sendSuccess) {
-        debugPrint('GateEntryService: SUCCESS - Entry command sent');
+        debugPrint('');
+        debugPrint(
+            '╔═══════════════════════════════════════════════════════════╗');
+        debugPrint(
+            '║             ★★★ SUCCESS - DOOR COMMAND SENT ★★★           ║');
+        debugPrint(
+            '╚═══════════════════════════════════════════════════════════╝');
+        debugPrint('');
         await _connectionManager.disconnectFromDevice(targetDevice!.id);
         await _cleanup();
         return EntryResult.success();
       } else {
-        debugPrint('GateEntryService: ERROR - Write failed');
+        debugPrint('GateEntryService: ERROR - sendEntryMessage returned false');
         await _connectionManager.disconnectFromDevice(targetDevice!.id);
         await _cleanup();
         return EntryResult.writeFail();

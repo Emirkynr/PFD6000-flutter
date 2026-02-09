@@ -34,14 +34,17 @@ public class DoorWidget1x1 extends AppWidgetProvider {
         WidgetStorageManager storage = new WidgetStorageManager(context);
         WidgetStorageManager.DoorInfo doorInfo = storage.getDoorInfo(appWidgetId);
         
+        // Set door icon with color tint based on configuration state
+        views.setImageViewResource(R.id.widget_icon, R.drawable.ic_door);
+        
         if (doorInfo != null) {
-            // Door is configured - show door icon
+            // Configured: WHITE door icon
             Log.d(TAG, "updateAppWidget: configured door=" + doorInfo.doorName);
-            views.setImageViewResource(R.id.widget_icon, R.drawable.ic_door_configured);
+            views.setInt(R.id.widget_icon, "setColorFilter", 0xFFFFFFFF); // White
         } else {
-            // Not configured - show add icon
+            // Not configured: RED door icon
             Log.d(TAG, "updateAppWidget: NOT configured");
-            views.setImageViewResource(R.id.widget_icon, R.drawable.ic_door_unconfigured);
+            views.setInt(R.id.widget_icon, "setColorFilter", 0xFFE53935); // Material Red 600
         }
         
         // Set click action
@@ -62,6 +65,7 @@ public class DoorWidget1x1 extends AppWidgetProvider {
         appWidgetManager.updateAppWidget(appWidgetId, views);
         Log.d(TAG, "updateAppWidget: complete for widgetId=" + appWidgetId);
     }
+
 
     @Override
     public void onDeleted(Context context, int[] appWidgetIds) {

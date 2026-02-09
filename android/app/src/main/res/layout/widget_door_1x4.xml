@@ -1,32 +1,69 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- 1x4 Widget: ENKA watermark + Politeknik logo (right) + door name + action text -->
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
     android:padding="12dp"
     android:background="@drawable/widget_background">
 
-    <TextView
-        android:id="@+id/widget_door_name"
+    <!-- Politeknik logo - top right corner -->
+    <ImageView
+        android:id="@+id/widget_politeknik_logo"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentTop="true"
+        android:src="@drawable/splash_logo"
+        android:scaleType="centerInside"
+        android:alpha="0.8"
+        android:contentDescription="Politeknik Logo" />
+
+    <!-- Door icon - left side -->
+    <ImageView
+        android:id="@+id/widget_door_icon"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_alignParentStart="true"
+        android:layout_centerVertical="true"
+        android:src="@drawable/ic_door"
+        android:scaleType="centerInside"
+        android:contentDescription="Door Icon" />
+
+    <!-- Text container - center/right of door icon -->
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text=""
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:textColor="#FFFFFF"
-        android:maxLines="1"
-        android:ellipsize="end" />
+        android:layout_toEndOf="@id/widget_door_icon"
+        android:layout_toStartOf="@id/widget_politeknik_logo"
+        android:layout_centerVertical="true"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/widget_action_text"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Kapı kaydetmek için dokun"
-        android:textSize="12sp"
-        android:textColor="#B0FFFFFF"
-        android:maxLines="1"
-        android:layout_marginTop="4dp" />
+        <!-- Door name -->
+        <TextView
+            android:id="@+id/widget_door_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:maxLines="1"
+            android:ellipsize="end" />
 
-</LinearLayout>
+        <!-- Action text -->
+        <TextView
+            android:id="@+id/widget_action_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Kapı kaydetmek için dokun"
+            android:textSize="11sp"
+            android:textColor="#B0FFFFFF"
+            android:maxLines="1"
+            android:layout_marginTop="2dp" />
+
+    </LinearLayout>
+
+</RelativeLayout>
