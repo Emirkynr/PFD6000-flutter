@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'scanner_page.dart';
 import '../ble/ble_manager.dart';
 
@@ -12,9 +13,9 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  BleManager? _bleManager; // BLE manager for pre-scanning
-  bool _showFirstLogo = true; // Control which logo to show
+  AnimationController? _controller;
+  BleManager? _bleManager;
+  bool _showFirstLogo = true;
 
   @override
   void initState() {
@@ -24,20 +25,40 @@ class _SplashScreenState extends State<SplashScreen>
     _bleManager = BleManager();
     _bleManager!.startScan();
 
+    _checkSkipSplash();
+  }
+
+  Future<void> _checkSkipSplash() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastLaunch = prefs.getInt('last_launch_ms') ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    // 5 dakika icinde tekrar acilirsa splash'i atla
+    if (now - lastLaunch < 300000) {
+      await prefs.setInt('last_launch_ms', now);
+      if (mounted) _navigateToHome();
+      return;
+    }
+
+    await prefs.setInt('last_launch_ms', now);
+    _startAnimation();
+  }
+
+  void _startAnimation() {
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500), // Each logo fades for 1.5s
+      duration: const Duration(milliseconds: 1200),
     );
 
-    // Start with first logo fade in
-    _controller.forward().then((_) {
-      // After 1.5s, switch to second logo
+    // Tek animasyon: ilk logo fade in, sonra ikinci logo, sonra gecis
+    _controller!.forward().then((_) {
+      if (!mounted) return;
       setState(() {
         _showFirstLogo = false;
       });
-      _controller.reset();
-      _controller.forward().then((_) {
-        // After second logo (total 3 seconds), navigate
+      _controller!.reset();
+      _controller!.forward().then((_) {
+        if (!mounted) return;
         _navigateToHome();
       });
     });
@@ -61,14 +82,13 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   void dispose() {
-    _controller.dispose();
-    _bleManager?.stopScan(); // Stop pre-scan before disposal
+    _controller?.dispose();
+    _bleManager?.stopScan();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Set status bar style
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -76,7 +96,6 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
-    // Dark theme background
     const backgroundColor = Color(0xFF121212);
     const contentColor = Colors.white;
 
@@ -86,7 +105,6 @@ class _SplashScreenState extends State<SplashScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Sequential Logo with Fade Animation
             SizedBox(
               width: 200,
               height: 100,
@@ -131,7 +149,6 @@ class _SplashScreenState extends State<SplashScreen>
               ),
             ),
             const SizedBox(height: 48),
-            // Fixed Title
             const Text(
               'ENKA GS',
               style: TextStyle(
@@ -142,7 +159,6 @@ class _SplashScreenState extends State<SplashScreen>
               ),
             ),
             const SizedBox(height: 8),
-            // Fixed Subtitle
             Text(
               'POLITEKNIK - ENKA',
               style: TextStyle(
@@ -153,7 +169,6 @@ class _SplashScreenState extends State<SplashScreen>
               ),
             ),
             const SizedBox(height: 8),
-            // Subtitle
             Text(
               'Bluetooth Geçiş Sistemi',
               style: TextStyle(

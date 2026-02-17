@@ -65,6 +65,19 @@
                 android:resource="@xml/widget_door_1x1_info" />
         </receiver>
         
+        <!-- 2x2 Door Widget -->
+        <receiver
+            android:name=".widget.DoorWidget2x2"
+            android:exported="true"
+            android:label="ENKA Kapı (Büyük)">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_door_2x2_info" />
+        </receiver>
+
         <!-- Widget Action Activity (transparent) -->
         <activity
             android:name=".widget.WidgetActionActivity"

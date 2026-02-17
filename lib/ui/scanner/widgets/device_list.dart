@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'device_list_tile.dart';
 
@@ -6,20 +6,26 @@ class DeviceList extends StatefulWidget {
   final List<DiscoveredDevice> devices;
   final Map<String, bool> deviceConnections;
   final bool buttonsDisabled;
+  final Set<String> favoriteIds;
+  final bool hasCard;
   final void Function(String deviceId) onEntry;
   final void Function(String deviceId) onExit;
   final void Function(DiscoveredDevice device) onTest;
   final void Function(String deviceId) onCardConfig;
+  final void Function(String deviceId, String deviceName) onToggleFavorite;
 
   const DeviceList({
     super.key,
     required this.devices,
     required this.deviceConnections,
     required this.buttonsDisabled,
+    required this.favoriteIds,
+    required this.hasCard,
     required this.onEntry,
     required this.onExit,
     required this.onTest,
     required this.onCardConfig,
+    required this.onToggleFavorite,
   });
 
   @override
@@ -87,8 +93,8 @@ class _DeviceListState extends State<DeviceList> with SingleTickerProviderStateM
                   Text(
                     'Cihaz bulunamadı',
                     style: TextStyle(
-                      fontSize: 20, 
-                      fontWeight: FontWeight.bold, 
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
                       color: Theme.of(context).colorScheme.onSurface
                     ),
                   ),
@@ -106,17 +112,21 @@ class _DeviceListState extends State<DeviceList> with SingleTickerProviderStateM
             ),
           );
         }
-        
+
         final device = widget.devices[index];
         final isConnected = widget.deviceConnections[device.id] ?? false;
+        final isFavorite = widget.favoriteIds.contains(device.id);
         return DeviceListTile(
           device: device,
           isConnected: isConnected,
           buttonsDisabled: widget.buttonsDisabled,
+          isFavorite: isFavorite,
+          hasCard: widget.hasCard,
           onEntry: () => widget.onEntry(device.id),
           onExit: () => widget.onExit(device.id),
           onTest: () => widget.onTest(device),
           onCardConfig: () => widget.onCardConfig(device.id),
+          onToggleFavorite: () => widget.onToggleFavorite(device.id, device.name),
         );
       },
     );

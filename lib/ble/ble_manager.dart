@@ -3,16 +3,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'package:sprintf/sprintf.dart';
 import 'dart:convert';
-import 'package:convert/convert.dart';
 import 'package:crypto/crypto.dart' as crypto;
-import '../ui/scanner/managers/message_sender.dart';
 import '../globals.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 /// BLE cihaz tarama ve yönetim sınıfı
-/// Optimize edilmiş tarama, filtreleme ve cihaz listesi yönetimi sağlar
+/// Singleton pattern - splash ve scanner page arasinda tarama sonuclarini korur
 class BleManager {
+  static final BleManager _instance = BleManager._internal();
+  factory BleManager() => _instance;
+  BleManager._internal();
+
   final FlutterReactiveBle _ble = FlutterReactiveBle();
   
   // Stream controller - bulunan cihazların listesini broadcast eder
@@ -24,6 +26,7 @@ class BleManager {
 
   // İç veri yapıları
   final Map<String, DiscoveredDevice> _devicesMap = {}; // Hızlı erişim için Map
+  final Map<String, DateTime> _deviceLastSeen = {}; // Staleness kontrolu icin
   StreamSubscription<DiscoveredDevice>? _scanSubscription;
   bool _isScanning = false;
 
@@ -65,7 +68,13 @@ class BleManager {
     debugPrint('BLE: ------------------------------${formattedDate}.');
     debugPrint('BLE: Tarama başlatılıyor... (nameFilter: $nameStartsWith, manufacturerId: ${manufacturerId != null ? '0x${manufacturerId.toRadixString(16).toUpperCase()}' : 'None'})');
     _isScanning = true;
-    _devicesMap.clear(); // Önceki cihazları temizle
+    // Staleness kontrolu: 30sn icerisinde gorulmeyenleri temizle
+    _devicesMap.removeWhere((id, _) {
+      final lastSeen = _deviceLastSeen[id];
+      if (lastSeen == null) return true;
+      return now.difference(lastSeen).inSeconds > 30;
+    });
+    _deviceLastSeen.removeWhere((id, _) => !_devicesMap.containsKey(id));
 
 //    debugPrint('BLE: Filtrele - mfID=${manufacturerId}.');
 //    PermissionStatus locationPermission =  Permission.location.request();
@@ -171,6 +180,7 @@ class BleManager {
 //                      .manufacturerData}');
                   // Cihazı map'e ekle veya güncelle
                   _devicesMap[device.id] = device;
+                  _deviceLastSeen[device.id] = DateTime.now();
 
                   // UI'ı güncelle
                   if (!_deviceController.isClosed) {
@@ -193,6 +203,7 @@ class BleManager {
           }
           // Cihazı map'e ekle veya güncelle
           _devicesMap[device.id] = device;
+          _deviceLastSeen[device.id] = DateTime.now();
 
           // UI'ı güncelle
           if (!_deviceController.isClosed) {

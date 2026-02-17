@@ -24,6 +24,8 @@ class BleService {
     Future<bool> attemptConnect({required Duration timeout}) async {
       // Önce varsa önceki bağlantıyı iptal et
       await _connectionSubscription?.cancel();
+
+      final completer = Completer<bool>();
       _connectionSubscription = _ble.connectToDevice(id: deviceId).listen(
         (update) {
           _connectionState = update.connectionState;
@@ -31,18 +33,27 @@ class BleService {
             _connectionController.add(_connectionState);
           }
           print('Bağlantı durumu: $_connectionState');
+          // Event-driven: bağlantı kurulunca hemen dön
+          if (update.connectionState == DeviceConnectionState.connected && !completer.isCompleted) {
+            completer.complete(true);
+          }
         },
         onError: (error) {
           _connectionState = DeviceConnectionState.disconnected;
           if (!_connectionController.isClosed) {
             _connectionController.add(_connectionState);
           }
+          if (!completer.isCompleted) {
+            completer.complete(false);
+          }
         },
       );
 
-      // Bağlantı timeout'u bekle
-      await Future.delayed(timeout);
-      return _connectionState == DeviceConnectionState.connected;
+      // Timeout ile bekle - bağlantı kurulunca hemen döner
+      return await completer.future.timeout(
+        timeout,
+        onTimeout: () => _connectionState == DeviceConnectionState.connected,
+      );
     }
 
     // İlk deneme
@@ -51,8 +62,8 @@ class BleService {
 
     // Bağlantıyı kes ve tekrar dene
     await disconnect();
-    await Future.delayed(const Duration(milliseconds: 500));
-    
+    await Future.delayed(const Duration(milliseconds: 300));
+
     // İkinci deneme
     connected = await attemptConnect(timeout: const Duration(seconds: 3));
     return connected;

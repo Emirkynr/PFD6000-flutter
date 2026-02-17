@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import '../managers/device_filter.dart';
 
@@ -7,23 +7,26 @@ class DeviceListTile extends StatefulWidget {
   final DiscoveredDevice device;
   final bool isConnected;
   final bool buttonsDisabled;
+  final bool isFavorite;
+  final bool hasCard;
   final VoidCallback onEntry;
   final VoidCallback onCardConfig;
-
-  // Unused callbacks kept for interface compatibility if needed,
-  // but unrelated buttons are removed from UI.
   final VoidCallback onExit;
   final VoidCallback onTest;
+  final VoidCallback onToggleFavorite;
 
   const DeviceListTile({
     super.key,
     required this.device,
     required this.isConnected,
     required this.buttonsDisabled,
+    required this.isFavorite,
+    required this.hasCard,
     required this.onEntry,
     required this.onExit,
     required this.onTest,
     required this.onCardConfig,
+    required this.onToggleFavorite,
   });
 
   @override
@@ -38,7 +41,6 @@ class _DeviceListTileState extends State<DeviceListTile>
   @override
   void initState() {
     super.initState();
-    // Setup pulsing animation for the bluetooth icon
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
@@ -57,7 +59,6 @@ class _DeviceListTileState extends State<DeviceListTile>
 
   @override
   Widget build(BuildContext context) {
-    // Bluetooth device name
     final deviceName = DeviceFilter.extractDeviceName(widget.device);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -76,7 +77,7 @@ class _DeviceListTileState extends State<DeviceListTile>
                 ScaleTransition(
                   scale: _scaleAnimation,
                   child: Container(
-                    width: 80, // Much larger
+                    width: 80,
                     height: 80,
                     decoration: BoxDecoration(
                       color: widget.isConnected
@@ -88,7 +89,7 @@ class _DeviceListTileState extends State<DeviceListTile>
                       widget.isConnected
                           ? Icons.bluetooth_connected
                           : Icons.bluetooth,
-                      size: 48, // Large Icon
+                      size: 48,
                       color: widget.isConnected
                           ? Colors.green
                           : colorScheme.primary,
@@ -109,7 +110,6 @@ class _DeviceListTileState extends State<DeviceListTile>
                         ),
                       ),
                       const SizedBox(height: 8),
-                      // Prominent "READY" Text (Turkish: HAZIR)
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
@@ -132,15 +132,22 @@ class _DeviceListTileState extends State<DeviceListTile>
                     ],
                   ),
                 ),
+                // Favori yildizi
+                IconButton(
+                  onPressed: widget.onToggleFavorite,
+                  icon: Icon(
+                    widget.isFavorite ? Icons.star : Icons.star_border,
+                    color: widget.isFavorite ? Colors.amber : colorScheme.outline,
+                    size: 28,
+                  ),
+                ),
               ],
             ),
           ),
 
-          // No diagnostic data (subtitle removed)
-
           const SizedBox(height: 16),
 
-          // Action Buttons
+          // Giris Butonu
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: SizedBox(
@@ -162,19 +169,46 @@ class _DeviceListTileState extends State<DeviceListTile>
             ),
           ),
 
+          // Cikis Butonu
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: widget.buttonsDisabled ? null : widget.onExit,
+                icon: const Icon(Icons.logout, size: 24),
+                label: const Text('ÇIKIŞ YAP',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.orange.shade700,
+                  side: BorderSide(color: Colors.orange.shade700),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                ),
+              ),
+            ),
+          ),
+
+          // Kart Konfigurasyonu Butonu
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
             child: SizedBox(
               width: double.infinity,
               child: FilledButton.tonalIcon(
                 onPressed: widget.buttonsDisabled ? null : widget.onCardConfig,
-                icon: const Icon(Icons.add_card),
-                label: const Text('YENİ KART EKLE',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                icon: Icon(widget.hasCard ? Icons.credit_card : Icons.add_card),
+                label: Text(
+                  widget.hasCard ? 'KARTI DEĞİŞTİR' : 'KART TANIMLA',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: widget.hasCard ? 14 : 16,
+                  ),
+                ),
                 style: FilledButton.styleFrom(
                   backgroundColor: colorScheme.secondaryContainer,
                   foregroundColor: colorScheme.onSecondaryContainer,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
                 ),

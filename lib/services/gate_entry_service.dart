@@ -92,7 +92,7 @@ class EntryResult {
 /// Shared service for gate entry - used by both main app button and widget
 /// Uses the same BLE code path: ConnectionManager + MessageSender
 class GateEntryService {
-  static const int _scanTimeoutSeconds = 8;
+  static const int _scanTimeoutSeconds = 5;
   static const int _connectTimeoutSeconds = 5;
 
   final BleManager _bleManager = BleManager();
@@ -260,7 +260,7 @@ class GateEntryService {
       debugPrint('GateEntryService: Connection SUCCESSFUL');
 
       // Small delay for connection stabilization (same as scanner_page)
-      await Future.delayed(const Duration(milliseconds: 300));
+      await Future.delayed(const Duration(milliseconds: 150));
 
       // Step 4: Send entry message
       debugPrint('GateEntryService: Step 4 - Sending entry message');

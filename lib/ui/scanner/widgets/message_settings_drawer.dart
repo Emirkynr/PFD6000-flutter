@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../main.dart';
+import '../../history_page.dart';
 
 class MessageSettingsDrawer extends StatefulWidget {
   const MessageSettingsDrawer({super.key});
@@ -46,7 +47,6 @@ class _MessageSettingsDrawerState extends State<MessageSettingsDrawer> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
 
     return Drawer(
       backgroundColor: colorScheme.surface,
@@ -138,6 +138,31 @@ class _MessageSettingsDrawerState extends State<MessageSettingsDrawer> {
                         },
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Gecis Gecmisi
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context); // Drawer'i kapat
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const HistoryPage(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.history),
+                        label: const Text('Geçiş Geçmişi'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ),

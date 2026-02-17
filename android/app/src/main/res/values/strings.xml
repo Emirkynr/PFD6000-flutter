@@ -3,4 +3,5 @@
     <string name="app_name">ENKA GS</string>
     <string name="widget_1x4_description">ENKA kapi giris widgeti (genis)</string>
     <string name="widget_1x1_description">ENKA kapi giris widgeti (kompakt)</string>
+    <string name="widget_2x2_description">ENKA kapi giris widgeti (buyuk)</string>
 </resources>
