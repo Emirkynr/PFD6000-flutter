@@ -5,10 +5,14 @@
 import FlutterMacOS
 import Foundation
 
+import flutter_local_notifications
+import local_auth_darwin
 import reactive_ble_mobile
 import shared_preferences_foundation
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
+  FlutterLocalNotificationsPlugin.register(with: registry.registrar(forPlugin: "FlutterLocalNotificationsPlugin"))
+  LocalAuthPlugin.register(with: registry.registrar(forPlugin: "LocalAuthPlugin"))
   ReactiveBlePlugin.register(with: registry.registrar(forPlugin: "ReactiveBlePlugin"))
   SharedPreferencesPlugin.register(with: registry.registrar(forPlugin: "SharedPreferencesPlugin"))
 }

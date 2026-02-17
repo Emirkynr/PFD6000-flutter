@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/settings_service.dart';
+import '../services/background_scan_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -228,8 +229,10 @@ class _SettingsPageState extends State<SettingsPage> {
                         await SettingsService.setBackgroundScanEnabled(value);
                         // Foreground service baslat/durdur
                         if (value) {
+                          await BackgroundScanService.start();
                           _showInfoSnackbar('Arka plan tarama baslatildi');
                         } else {
+                          await BackgroundScanService.stop();
                           _showInfoSnackbar('Arka plan tarama durduruldu');
                         }
                       },

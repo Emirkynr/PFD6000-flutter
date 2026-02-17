@@ -15,6 +15,9 @@ import 'scanner/managers/card_config_handler.dart';
 import 'message_log_page.dart';
 import '../services/favorites_service.dart';
 import '../services/history_service.dart';
+import '../services/auto_open_service.dart';
+import '../services/settings_service.dart';
+import 'package:local_auth/local_auth.dart';
 
 /// Ana tarayıcı sayfası - BLE cihaz tarama ve mesaj gönderme
 /// Raw data'dan cihaz adı ve şifre çıkararak giriş/çıkış mesajları gönderir
@@ -47,6 +50,8 @@ class _ScannerPageState extends State<ScannerPage> {
   String? _lastUsedDeviceId;
   Set<String> _favoriteIds = {};
   bool _hasCard = false;
+  final AutoOpenService _autoOpenService = AutoOpenService();
+  bool _autoOpenEnabled = false;
 
   @override
   void initState() {
@@ -64,6 +69,11 @@ class _ScannerPageState extends State<ScannerPage> {
       final filtered =
           list.where((device) => DeviceFilter.hasRawData5054(device)).toList();
       setState(() => devices = filtered);
+
+      // Otomatik acma kontrolu
+      if (_autoOpenEnabled && !_buttonsDisabled) {
+        _checkAutoOpen(filtered);
+      }
     });
 
     // BLE bağlantı durumunu dinle
@@ -317,15 +327,59 @@ class _ScannerPageState extends State<ScannerPage> {
   /// Favoriler, son kullanilan kapi ve kart durumunu yukle
   Future<void> _loadFavorites() async {
     await FavoritesService.preload();
+    await SettingsService.preload();
     final lastId = await FavoritesService.getLastDeviceId();
     final favIds = await FavoritesService.getFavoriteIds();
     final cardBytes = await CardManager.getConfiguredCardNumber();
+    final autoOpen = await SettingsService.isAutoOpenEnabled();
     if (mounted) {
       setState(() {
         _lastUsedDeviceId = lastId;
         _favoriteIds = favIds;
         _hasCard = cardBytes.isNotEmpty;
+        _autoOpenEnabled = autoOpen;
       });
+    }
+  }
+
+  /// Otomatik kapi acma kontrolu
+  Future<void> _checkAutoOpen(List<DiscoveredDevice> filteredDevices) async {
+    final deviceId = await _autoOpenService.checkDevices(filteredDevices);
+    if (deviceId == null) return;
+
+    try {
+      // Biyometrik onay gerekiyorsa
+      final needBiometric = await _autoOpenService.isBiometricRequired();
+      if (needBiometric) {
+        final auth = LocalAuthentication();
+        final didAuth = await auth.authenticate(
+          localizedReason: 'Kapi acmak icin dogrulayin',
+          options: const AuthenticationOptions(biometricOnly: true),
+        );
+        if (!didAuth) {
+          _autoOpenService.completeProcessing();
+          return;
+        }
+      }
+
+      // Giris komutunu gonder
+      await _sendEntryMessage(deviceId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 3),
+            content: const Text('Otomatik giris yapildi'),
+            backgroundColor: Colors.teal,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('AutoOpen hata: $e');
+    } finally {
+      _autoOpenService.completeProcessing();
     }
   }
 
@@ -417,6 +471,7 @@ class _ScannerPageState extends State<ScannerPage> {
     _bleStatusSub?.cancel();
     _scanAutoStopTimer?.cancel();
     _cardConfigHandler?.stopListening();
+    _autoOpenService.dispose();
     super.dispose();
   }
 

@@ -5,9 +5,35 @@ import 'ui/widget_config/widget_door_picker_page.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
 import 'services/widget_channel_service.dart';
+import 'services/notification_service.dart';
+import 'services/background_scan_service.dart';
+import 'services/settings_service.dart';
+import 'services/gate_entry_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Bildirim servisini baslat
+  await NotificationService.initialize();
+
+  // Bildirim aksiyonlarini dinle (giris/cikis)
+  NotificationService.onNotificationAction = (doorId, action) async {
+    final service = GateEntryService();
+    final result = await service.enterGate(doorId);
+    final doorName = doorId.length > 8 ? doorId.substring(0, 8) : doorId;
+    await NotificationService.showAutoOpenResult(
+      doorName: doorName,
+      success: result.success,
+    );
+    await service.dispose();
+  };
+
+  // Arka plan tarama ayarliysa baslat
+  final bgEnabled = await SettingsService.isBackgroundScanEnabled();
+  if (bgEnabled) {
+    BackgroundScanService.initForegroundTask();
+  }
+
   runApp(const MyApp());
 }
 
