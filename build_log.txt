@@ -1,0 +1,31 @@
+Launching lib/main.dart on iPhone 16 Pro Max in debug mode...
+Running Xcode build...                                          
+Xcode build done.                                           13,1s
+Failed to build iOS app
+Error output from Xcode build:
+↳
+    ** BUILD FAILED **
+
+
+Xcode's output:
+↳
+    Writing result bundle at path:
+    	/var/folders/47/0kxq7b2n0937pyvd24_8nqh00000gn/T/flutter_tools.JFMlHZ/flutter_ios_build_temp_dirZtoHoT/temporary_xcresult_bundle
+
+    lib/services/background_scan_service.dart:58:47: Error: Member not found: 'success'.
+        _running = result == ServiceRequestResult.success;
+                                                  ^^^^^^^
+    Target kernel_snapshot_program failed: Exception
+    Failed to package /Users/emir/Documents/Projects/PFD6000-flutter.
+    Command PhaseScriptExecution failed with a nonzero exit code
+    /Users/emir/Documents/Projects/PFD6000-flutter/ios/Pods/Pods.xcodeproj: warning: The iOS Simulator deployment target 'IPHONEOS_DEPLOYMENT_TARGET' is set to 10.0, but the range of supported deployment target versions is 12.0 to 18.2.99. (in target 'Protobuf-Protobuf_Privacy' from project 'Pods')
+    /Users/emir/Documents/Projects/PFD6000-flutter/ios/Pods/Pods.xcodeproj: warning: The iOS Simulator deployment target 'IPHONEOS_DEPLOYMENT_TARGET' is set to 11.0, but the range of supported deployment target versions is 12.0 to 18.2.99. (in target 'flutter_local_notifications-flutter_local_notifications_privacy' from project 'Pods')
+    /Users/emir/Documents/Projects/PFD6000-flutter/ios/Pods/Pods.xcodeproj: warning: The iOS Simulator deployment target 'IPHONEOS_DEPLOYMENT_TARGET' is set to 9.0, but the range of supported deployment target versions is 12.0 to 18.2.99. (in target 'permission_handler_apple-permission_handler_apple_privacy' from project 'Pods')
+    /Users/emir/Documents/Projects/PFD6000-flutter/ios/Pods/Pods.xcodeproj: warning: The iOS Simulator deployment target 'IPHONEOS_DEPLOYMENT_TARGET' is set to 11.0, but the range of supported deployment target versions is 12.0 to 18.2.99. (in target 'SwiftProtobuf-SwiftProtobuf' from project 'Pods')
+    note: Run script build phase 'Run Script' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'Runner' from project 'Runner')
+    note: Run script build phase 'Thin Binary' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'Runner' from project 'Runner')
+    /Users/emir/Documents/Projects/PFD6000-flutter/ios/Pods/Pods.xcodeproj: warning: The iOS Simulator deployment target 'IPHONEOS_DEPLOYMENT_TARGET' is set to 11.0, but the range of supported deployment target versions is 12.0 to 18.2.99. (in target 'SwiftProtobuf' from project 'Pods')
+    /Users/emir/Documents/Projects/PFD6000-flutter/ios/Pods/Pods.xcodeproj: warning: The iOS Simulator deployment target 'IPHONEOS_DEPLOYMENT_TARGET' is set to 10.0, but the range of supported deployment target versions is 12.0 to 18.2.99. (in target 'Protobuf' from project 'Pods')
+
+Could not build the application for the simulator.
+Error launching application on iPhone 16 Pro Max.

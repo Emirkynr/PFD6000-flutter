@@ -55,7 +55,7 @@ class BackgroundScanService {
       callback: backgroundScanCallback,
     );
 
-    _running = result == ServiceRequestResult.success;
+    _running = result is ServiceRequestSuccess;
     debugPrint('BackgroundScan: Basladi=$_running');
     return _running;
   }
