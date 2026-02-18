@@ -7,13 +7,23 @@ import 'package:crypto/crypto.dart' as crypto;
 import '../globals.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'dart:io';
+import 'package:device_info_plus/device_info_plus.dart';
 
 /// BLE cihaz tarama ve yönetim sınıfı
 /// Singleton pattern - splash ve scanner page arasinda tarama sonuclarini korur
 class BleManager {
   static final BleManager _instance = BleManager._internal();
   factory BleManager() => _instance;
-  BleManager._internal();
+  BleManager._internal() {
+    _checkIfSimulator().then((_) {
+      if (_isDemoMode && isScanning) {
+        // If we are already scanning (but started as non-demo), restart as demo
+        stopScan();
+        startScan();
+      }
+    });
+  }
 
   final FlutterReactiveBle _ble = FlutterReactiveBle();
   
@@ -29,9 +39,23 @@ class BleManager {
   final Map<String, DateTime> _deviceLastSeen = {}; // Staleness kontrolu icin
   StreamSubscription<DiscoveredDevice>? _scanSubscription;
   bool _isScanning = false;
+  bool _isDemoMode = false;
+  Timer? _demoTimer;
 
   // Getter
   bool get isScanning => _isScanning;
+  bool get isDemoMode => _isDemoMode;
+
+  Future<void> _checkIfSimulator() async {
+    if (Platform.isIOS) {
+      final deviceInfo = DeviceInfoPlugin();
+      final iosInfo = await deviceInfo.iosInfo;
+      if (!iosInfo.isPhysicalDevice) {
+        _isDemoMode = true;
+        debugPrint('BLE: Simulator detected - Demo Mode ENABLED');
+      }
+    }
+  }
 
   /// ✅ BLE taramayı başlat
   /// [nameStartsWith]: Cihaz isminin başlangıcına göre filtrele (opsiyonel)
@@ -50,18 +74,10 @@ class BleManager {
       stopScan();
     }
 
-
-///    int rn;
-///    rn=12345678;
-///    String md5seed = sprintf('Poli%08dteknik', [rn]);
-///    debugPrint('MD5 TEST: --------------------------------------.${rn}/${md5seed}');
-///    var md5 = crypto.md5;
-///    var content = new Utf8Encoder().convert(md5seed);
-///    var digest = md5.convert(content);
-///    String md5s1=hex.encode(digest.bytes);
-///    String md5s=md5.convert(utf8.encode(md5seed)).toString();
-///    String md5bytes = sprintf('%02X.%02X.%02X', [digest.bytes[0],digest.bytes[1],digest.bytes[2]]);
-///    debugPrint('MD5 : ${md5s}/${md5s1}/${md5bytes}');
+    if (_isDemoMode) {
+      _startDemoScan();
+      return;
+    }
 
     DateTime now = DateTime.now();
     String formattedDate = DateFormat('kk:mm:ss EEE d MMM').format(now);
@@ -75,11 +91,6 @@ class BleManager {
       return now.difference(lastSeen).inSeconds > 30;
     });
     _deviceLastSeen.removeWhere((id, _) => !_devicesMap.containsKey(id));
-
-//    debugPrint('BLE: Filtrele - mfID=${manufacturerId}.');
-//    PermissionStatus locationPermission =  Permission.location.request();
-//    PermissionStatus bleScan =  Permission.bluetoothScan.request();
-//    PermissionStatus bleConnect =  Permission.bluetoothConnect.request();
 
     try {
       // Servis UUID'lerini parse et
@@ -228,8 +239,64 @@ class BleManager {
     }
   }
 
+  void _startDemoScan() {
+    debugPrint('BLE: Demo Scan Started');
+    _isScanning = true;
+    _demoTimer?.cancel();
+    _demoTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (!_isScanning) {
+        timer.cancel();
+        return;
+      }
+
+      // Dummy Device 1
+      final device1 = DiscoveredDevice(
+        id: 'DEMO-001',
+        name: 'Demo Kapi 1',
+        serviceUuids: [],
+        manufacturerData: Uint8List.fromList([
+          0x50, 0x54, 0x00, 0x00, 0x50, 0x54, // Politeknik Header
+          0x52, 0x4E, 0x30, 0x30, 0x31, 0x32, 0x33, 0x34, // Random Number
+          0x44, 0x65, 0x6D, 0x6F, 0x20, 0x31 // Name: Demo 1
+        ]),
+        rssi: -60 + (DateTime.now().second % 10), // Fluctuating RSSI
+        serviceData: {},
+      );
+
+      // Dummy Device 2
+      final device2 = DiscoveredDevice(
+        id: 'DEMO-002',
+        name: 'Demo Kapi 2',
+        serviceUuids: [],
+        manufacturerData: Uint8List.fromList([
+          0x50, 0x54, 0x00, 0x00, 0x50, 0x54, // Politeknik Header
+          0x52, 0x4E, 0x30, 0x30, 0x35, 0x36, 0x37, 0x38, // Random Number
+          0x44, 0x65, 0x6D, 0x6F, 0x20, 0x32 // Name: Demo 2
+        ]),
+        rssi: -75 + (DateTime.now().second % 5),
+        serviceData: {},
+      );
+
+      _devicesMap[device1.id] = device1;
+      _devicesMap[device2.id] = device2;
+      _deviceLastSeen[device1.id] = DateTime.now();
+      _deviceLastSeen[device2.id] = DateTime.now();
+
+      if (!_deviceController.isClosed) {
+        _deviceController.add(_devicesMap.values.toList());
+      }
+    });
+  }
+
   /// ✅ BLE taramayı durdur
   Future<void> stopScan() async {
+    if (_isDemoMode) {
+      debugPrint('BLE: Demo Scan Stopped');
+      _isScanning = false;
+      _demoTimer?.cancel();
+      return;
+    }
+
     if (!_isScanning) {
       //PermissionStatus locationPermission =
       await Permission.location.request();

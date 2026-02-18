@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
+import 'dart:io';
+import 'package:device_info_plus/device_info_plus.dart';
 
 class BleService {
   final FlutterReactiveBle _ble = FlutterReactiveBle();
@@ -19,8 +21,35 @@ class BleService {
   
   // Auto refresh timer
   Timer? _autoRefreshTimer;
+  bool _isDemoMode = false;
+
+  BleService() {
+    _checkIfSimulator();
+  }
+
+  Future<void> _checkIfSimulator() async {
+    if (Platform.isIOS) {
+      final deviceInfo = DeviceInfoPlugin();
+      final iosInfo = await deviceInfo.iosInfo;
+      if (!iosInfo.isPhysicalDevice) {
+        _isDemoMode = true;
+        print('BLE Service: Simulator detected - Demo Mode ENABLED');
+      }
+    }
+  }
 
   Future<bool> connectToDevice(String deviceId) async {
+    if (_isDemoMode) {
+      print('BLE Service: Demo connection initiated...');
+      await Future.delayed(const Duration(seconds: 1));
+      _connectionState = DeviceConnectionState.connected;
+      if (!_connectionController.isClosed) {
+        _connectionController.add(_connectionState);
+      }
+      print('BLE Service: Demo Connected!');
+      return true;
+    }
+
     Future<bool> attemptConnect({required Duration timeout}) async {
       // Önce varsa önceki bağlantıyı iptal et
       await _connectionSubscription?.cancel();
@@ -70,6 +99,22 @@ class BleService {
   }
 
   Future<void> discoverServices(String deviceId) async {
+    if (_isDemoMode) {
+      print('BLE Service: Demo Services Discovered');
+      
+      // Mock Characteristics
+      _writeCharacteristic = QualifiedCharacteristic(
+        serviceId: Uuid.parse("0000180A-0000-1000-8000-00805F9B34FB"), 
+        characteristicId: Uuid.parse("00002A29-0000-1000-8000-00805F9B34FB"), 
+        deviceId: deviceId
+      );
+      _readCharacteristic = _writeCharacteristic;
+
+      await startESPNotificationListening();
+      _startAutoRefresh();
+      return;
+    }
+
     try {
       print('Servisler keşfediliyor...');
       await _ble.discoverAllServices(deviceId);
@@ -159,6 +204,14 @@ class BleService {
   }
 
   Future<void> sendMessage(String message) async {
+    if (_isDemoMode) {
+      print('BLE Service: Demo Message Sent: $message');
+      if (!_messageController.isClosed) {
+        _messageController.add('Gönderilen: $message');
+      }
+      return;
+    }
+
     if (_writeCharacteristic == null) {
       print('Write characteristic bulunamadı!');
       return;
@@ -182,6 +235,15 @@ class BleService {
 
   /// Binary mesaj gönder - Direkt byte array olarak gönder
   Future<void> sendBinaryMessage(List<int> binaryData) async {
+    if (_isDemoMode) {
+      print('BLE Service: Demo Binary Message Sent: ${binaryData.length} bytes');
+       final data = Uint8List.fromList(binaryData);
+      if (!_messageController.isClosed) {
+        _messageController.add('Mesaj gönderildi: ${data.length} byte');
+      }
+      return;
+    }
+
     if (_writeCharacteristic == null) {
       print('Write characteristic bulunamadı!');
       return;
@@ -194,24 +256,8 @@ class BleService {
       print('1. BYTE ARRAY (${binaryData.length} byte):');
       print('   ${binaryData.map((b) => '0x${b.toRadixString(16).padLeft(2, '0').toUpperCase()}').join(' ')}');
       
-      // 2. HEX String (sadece gösterim için)
-//      final hexString = binaryData.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
-//      print('2. HEX STRING (${hexString.length} karakter):');
-//      print('   "$hexString"');
-      
-      // 3. ASCII String (byte array'den)
-//      try {
-//        final asciiString = String.fromCharCodes(binaryData);
-//        print('3. ASCII STRING:');
-//        print('   "$asciiString"');
-//      } catch (e) {
-//        print('3. ASCII STRING: Dönüşüm başarısız');
-//      }
-      
       // Direkt byte array'i gönder (HEX string'e ÇEVİRME!)
       final data = Uint8List.fromList(binaryData);
-//      print('4. GÖNDERİLEN (Direkt byte array): ${data.length} byte');
-//      print('   ${data.map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(' ')}');
       
       await _ble.writeCharacteristicWithResponse(_writeCharacteristic!, value: data);
       print('✓ Mesaj başarıyla gönderildi!');
@@ -230,6 +276,15 @@ class BleService {
   }
 
   Future<void> readData() async {
+    if (_isDemoMode) {
+      final dataString = "Demo Data ${DateTime.now().second}";
+      print('Okunan veri: $dataString');
+      if (!_dataController.isClosed) {
+        _dataController.add('Okunan: $dataString');
+      }
+      return;
+    }
+
     if (_readCharacteristic == null) {
       print('Read characteristic bulunamadı!');
       return;
@@ -297,6 +352,11 @@ class BleService {
       // READ işlemi yapmıyoruz - sadece notification dinliyoruz
       print('ESP notification dinleme başlatıldı - READ işlemi yapılmıyor');
       
+      if (_isDemoMode) {
+         print('ESP Demo Notification dinleme başlatıldı');
+         return;
+      }
+      
       // Debug: ESP cihazının veri gönderip göndermediğini kontrol et
       if (!_dataController.isClosed) {
         _dataController.add('ESP NOTIFY ve INDICATE Dinleme Başlatıldı');
@@ -317,20 +377,6 @@ class BleService {
           // 1. Byte Array
           print('1. BYTE ARRAY:');
           print('   ${data.map((b) => '0x${b.toRadixString(16).padLeft(2, '0').toUpperCase()}').join(' ')}');
-          
-          // 2. HEX String
-//          final hexString = data.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
-//          print('2. HEX STRING:');
-//          print('   "$hexString"');
-          
-          // 3. ASCII String
-//          try {
-//            final stringData = String.fromCharCodes(data);
-//            print('3. ASCII STRING:');
-//            print('   "$stringData"');
-//          } catch (e) {
-//            print('3. ASCII STRING: Dönüşüm başarısız - $e');
-//          }
           
           print('==============================\n');
           
@@ -365,31 +411,6 @@ class BleService {
           print('1. BYTE ARRAY:');
           print('   ${data.map((b) => '0x${b.toRadixString(16).padLeft(2, '0').toUpperCase()}').join(' ')}');
           
-          // 2. HEX String
-//          final hexString = data.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
-//          print('2. HEX STRING:');
-//          print('   "$hexString"');
-          
-          // 3. ASCII String
-//          String stringData = '';
-//          try {
-//            stringData = String.fromCharCodes(data);
-//            print('3. ASCII STRING:');
-//            print('   "$stringData"');
-//          } catch (e) {
-//            print('3. ASCII STRING: Dönüşüm başarısız - $e');
-//          }
-          
-          // 4. Binary String
-  //        final binaryString = data.map((byte) => byte.toRadixString(2).padLeft(8, '0')).join(' ');
-  //        print('4. BINARY STRING:');
-  //        print('   $binaryString');
-          
-          // 5. Integer Array
-//          final intString = data.map((byte) => byte.toString()).join(', ');
-//          print('5. INTEGER ARRAY:');
-//          print('   [$intString]');
-          
           print('===========================\n');
           
           // Number stream'e byte array gönder
@@ -400,10 +421,6 @@ class BleService {
           // Data stream'e tüm formatları gönder
           if (!_dataController.isClosed) {
             _dataController.add('=== ESP INDICATE (${data.length} Byte) ===');
-//            _dataController.add('STRING: $stringData');
-//            _dataController.add('HEX: $hexString');
-//            _dataController.add('BINARY: $binaryString');
-//            _dataController.add('INT: $intString');
             _dataController.add('========================');
           }
         },
@@ -567,6 +584,25 @@ class BleService {
   Future<void> _readDataPeriodically() async {
     if (!isConnected || _readCharacteristic == null) {
       print('Periyodik okuma: Bağlantı yok veya characteristic bulunamadı');
+      return;
+    }
+
+    if (_isDemoMode) {
+      // Mock Data 
+      final data = Uint8List.fromList([0x01, 0x02, 0x03, 0x04, DateTime.now().second]);
+      final hexString = data.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join('');
+      
+      print('Periyodik Demo Okuma - Length: ${data.length}');
+      
+      if (!_numberController.isClosed) {
+        _numberController.add(data);
+      }
+      
+      if (!_dataController.isClosed) {
+        _dataController.add('=== 3 SANİYE DEMO OKUMA (${data.length} Byte) ===');
+        _dataController.add('HEX: $hexString');
+        _dataController.add('==========================================');
+      }
       return;
     }
 
