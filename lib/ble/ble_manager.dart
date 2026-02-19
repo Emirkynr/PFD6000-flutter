@@ -47,12 +47,18 @@ class BleManager {
   bool get isDemoMode => _isDemoMode;
 
   Future<void> _checkIfSimulator() async {
+    final deviceInfo = DeviceInfoPlugin();
     if (Platform.isIOS) {
-      final deviceInfo = DeviceInfoPlugin();
       final iosInfo = await deviceInfo.iosInfo;
       if (!iosInfo.isPhysicalDevice) {
         _isDemoMode = true;
-        debugPrint('BLE: Simulator detected - Demo Mode ENABLED');
+        debugPrint('BLE: iOS Simulator detected - Demo Mode ENABLED');
+      }
+    } else if (Platform.isAndroid) {
+      final androidInfo = await deviceInfo.androidInfo;
+      if (!androidInfo.isPhysicalDevice) {
+        _isDemoMode = true;
+        debugPrint('BLE: Android Emulator detected - Demo Mode ENABLED');
       }
     }
   }

@@ -28,12 +28,18 @@ class BleService {
   }
 
   Future<void> _checkIfSimulator() async {
+    final deviceInfo = DeviceInfoPlugin();
     if (Platform.isIOS) {
-      final deviceInfo = DeviceInfoPlugin();
       final iosInfo = await deviceInfo.iosInfo;
       if (!iosInfo.isPhysicalDevice) {
         _isDemoMode = true;
-        print('BLE Service: Simulator detected - Demo Mode ENABLED');
+        print('BLE Service: iOS Simulator detected - Demo Mode ENABLED');
+      }
+    } else if (Platform.isAndroid) {
+      final androidInfo = await deviceInfo.androidInfo;
+      if (!androidInfo.isPhysicalDevice) {
+        _isDemoMode = true;
+        print('BLE Service: Android Emulator detected - Demo Mode ENABLED');
       }
     }
   }
