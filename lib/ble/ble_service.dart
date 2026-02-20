@@ -17,13 +17,15 @@ class BleService {
   QualifiedCharacteristic? _writeCharacteristic;
   QualifiedCharacteristic? _readCharacteristic;
   
-  // Auto refresh timer
-  Timer? _autoRefreshTimer;
 
   Future<bool> connectToDevice(String deviceId) async {
     Future<bool> attemptConnect({required Duration timeout}) async {
       // Önce varsa önceki bağlantıyı iptal et
       await _connectionSubscription?.cancel();
+
+      // Completer: bağlantı event'i gelir gelmez tamamlanır (kör sleep yok)
+      final completer = Completer<bool>();
+
       _connectionSubscription = _ble.connectToDevice(id: deviceId).listen(
         (update) {
           _connectionState = update.connectionState;
@@ -31,30 +33,39 @@ class BleService {
             _connectionController.add(_connectionState);
           }
           print('Bağlantı durumu: $_connectionState');
+          if (update.connectionState == DeviceConnectionState.connected &&
+              !completer.isCompleted) {
+            completer.complete(true);
+          }
         },
         onError: (error) {
           _connectionState = DeviceConnectionState.disconnected;
           if (!_connectionController.isClosed) {
             _connectionController.add(_connectionState);
           }
+          if (!completer.isCompleted) {
+            completer.complete(false);
+          }
         },
       );
 
-      // Bağlantı timeout'u bekle
-      await Future.delayed(timeout);
-      return _connectionState == DeviceConnectionState.connected;
+      try {
+        return await completer.future.timeout(timeout, onTimeout: () => false);
+      } catch (_) {
+        return false;
+      }
     }
 
-    // İlk deneme
-    bool connected = await attemptConnect(timeout: const Duration(seconds: 3));
+    // İlk deneme (max 5s — ama cihaz bağlanır bağlanmaz tamamlanır)
+    bool connected = await attemptConnect(timeout: const Duration(seconds: 5));
     if (connected) return true;
 
     // Bağlantıyı kes ve tekrar dene
     await disconnect();
     await Future.delayed(const Duration(milliseconds: 500));
-    
+
     // İkinci deneme
-    connected = await attemptConnect(timeout: const Duration(seconds: 3));
+    connected = await attemptConnect(timeout: const Duration(seconds: 5));
     return connected;
   }
 
@@ -139,8 +150,6 @@ class BleService {
       // Notification dinleme başlat
       if (_readCharacteristic != null) {
         await startESPNotificationListening();
-        // 3 saniyede bir otomatik yenileme başlat
-        _startAutoRefresh();
       }
     } catch (e) {
       print('Servis keşfi hatası: $e');
@@ -322,12 +331,12 @@ class BleService {
 //          }
           
           print('==============================\n');
-          
+
           // Number stream'e gönder (Byte array format)
           if (!_numberController.isClosed) {
             _numberController.add(data);
           }
-          
+
           // Data stream'e gönder
           if (!_dataController.isClosed) {
             _dataController.add('$data');
@@ -340,71 +349,8 @@ class BleService {
           }
         },
       );
-      
-      // INDICATE için de dinle (ESP cihazı INDICATE kullanıyor olabilir)
-      print('ESP INDICATE dinleme de başlatılıyor...');
-      
-      // Aynı characteristic'i tekrar dinle (INDICATE için)
-      _ble.subscribeToCharacteristic(_readCharacteristic!).listen(
-        (data) {
-          print('\n=== ESP INDICATE ALINDI ===');
-          print('TOPLAM: ${data.length} byte');
-          
-          // 1. Byte Array
-          print('1. BYTE ARRAY:');
-          print('   ${data.map((b) => '0x${b.toRadixString(16).padLeft(2, '0').toUpperCase()}').join(' ')}');
-          
-          // 2. HEX String
-//          final hexString = data.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
-//          print('2. HEX STRING:');
-//          print('   "$hexString"');
-          
-          // 3. ASCII String
-//          String stringData = '';
-//          try {
-//            stringData = String.fromCharCodes(data);
-//            print('3. ASCII STRING:');
-//            print('   "$stringData"');
-//          } catch (e) {
-//            print('3. ASCII STRING: Dönüşüm başarısız - $e');
-//          }
-          
-          // 4. Binary String
-  //        final binaryString = data.map((byte) => byte.toRadixString(2).padLeft(8, '0')).join(' ');
-  //        print('4. BINARY STRING:');
-  //        print('   $binaryString');
-          
-          // 5. Integer Array
-//          final intString = data.map((byte) => byte.toString()).join(', ');
-//          print('5. INTEGER ARRAY:');
-//          print('   [$intString]');
-          
-          print('===========================\n');
-          
-          // Number stream'e byte array gönder
-          if (!_numberController.isClosed) {
-            _numberController.add(data);
-          }
-          
-          // Data stream'e tüm formatları gönder
-          if (!_dataController.isClosed) {
-            _dataController.add('=== ESP INDICATE (${data.length} Byte) ===');
-//            _dataController.add('STRING: $stringData');
-//            _dataController.add('HEX: $hexString');
-//            _dataController.add('BINARY: $binaryString');
-//            _dataController.add('INT: $intString');
-            _dataController.add('========================');
-          }
-        },
-        onError: (error) {
-          print('ESP INDICATE hatası: $error');
-          if (!_dataController.isClosed) {
-            _dataController.add('ESP INDICATE Hatası: $error');
-          }
-        },
-      );
-      
-      print('ESP hem NOTIFY hem INDICATE dinleme başlatıldı');
+
+      print('ESP NOTIFY dinleme başlatıldı');
     } catch (e) {
       print('ESP notification başlatma hatası: $e');
       if (!_dataController.isClosed) {
@@ -531,87 +477,8 @@ class BleService {
     }
   }
 
-  /// 3 saniyede bir otomatik yenileme başlat
-  void _startAutoRefresh() {
-    _autoRefreshTimer?.cancel();
-    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
-      if (isConnected && _readCharacteristic != null) {
-        print('3 saniye otomatik yenileme - ESP\'den veri okunuyor...');
-        _readDataPeriodically();
-      } else {
-        print('3 saniye otomatik yenileme - Bağlantı yok, timer durduruluyor');
-        timer.cancel();
-      }
-    });
-    
-    if (!_dataController.isClosed) {
-      _dataController.add('=== 3 SANİYE OTOMATİK YENİLEME BAŞLATILDI ===');
-      _dataController.add('ESP cihazından 3 saniyede bir veri okunacak');
-      _dataController.add('Bağlantı kesilirse otomatik yenileme duracak');
-      _dataController.add('==========================================');
-    }
-  }
-
-  /// Periyodik veri okuma
-  Future<void> _readDataPeriodically() async {
-    if (!isConnected || _readCharacteristic == null) {
-      print('Periyodik okuma: Bağlantı yok veya characteristic bulunamadı');
-      return;
-    }
-
-    try {
-      print('3 saniye periyodik okuma başlatıldı...');
-      
-      // READ işlemi yap
-      final data = await _ble.readCharacteristic(_readCharacteristic!);
-      print('Periyodik okuma - ${data.length} byte alındı');
-      
-      // Tüm format türlerini hazırla
-      final hexString = data.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join('');
-      final binaryString = data.map((byte) => byte.toRadixString(2).padLeft(8, '0')).join(' ');
-      final intString = data.map((byte) => byte.toString()).join(', ');
-      final byteString = data.toString();
-      
-      // String dönüşümü
-      String stringData = '';
-      try {
-        stringData = String.fromCharCodes(data);
-      } catch (e) {
-        stringData = 'String dönüşümü başarısız: $e';
-      }
-      
-      print('Periyodik Okuma - Hex: $hexString');
-//      print('Periyodik Okuma - Binary: $binaryString');
-//      print('Periyodik Okuma - Int: $intString');
-//      print('Periyodik Okuma - Byte: $byteString');
-//      print('Periyodik Okuma - String: $stringData');
-      
-      // Number stream'e byte array gönder
-      if (!_numberController.isClosed) {
-        _numberController.add(data);
-      }
-      
-      // Data stream'e tüm formatları gönder
-      if (!_dataController.isClosed) {
-        _dataController.add('=== 3 SANİYE PERİYODİK OKUMA (${data.length} Byte) ===');
-        _dataController.add('HEX: $hexString');
-  //      _dataController.add('BINARY: $binaryString');
-  //      _dataController.add('INT: $intString');
-  //      _dataController.add('BYTE: $byteString');
-  //      _dataController.add('STRING: $stringData');
-        _dataController.add('==========================================');
-      }
-    } catch (e) {
-      print('Periyodik okuma hatası: $e');
-      if (!_dataController.isClosed) {
-        _dataController.add('Periyodik Okuma Hatası: $e');
-      }
-    }
-  }
-
   Future<void> disconnect() async {
     await _connectionSubscription?.cancel();
-    _autoRefreshTimer?.cancel();
     _connectionState = DeviceConnectionState.disconnected;
     if (!_connectionController.isClosed) {
       _connectionController.add(_connectionState);
@@ -627,8 +494,7 @@ class BleService {
 
   void dispose() {
     _connectionSubscription?.cancel();
-    _autoRefreshTimer?.cancel();
-    
+
     if (!_connectionController.isClosed) {
       _connectionController.close();
     }

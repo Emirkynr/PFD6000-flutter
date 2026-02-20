@@ -143,6 +143,9 @@ class _ScannerPageState extends State<ScannerPage> {
     if (confirmed != true) return;
     print('Confirmed');
 
+    // Bağlanmadan önce scan'i durdur (BLE stack çakışmasını önle)
+    await _bleManager.stopScan();
+
     try {
       // Cihaza bağlan
       print('Connect Device');
@@ -167,6 +170,8 @@ class _ScannerPageState extends State<ScannerPage> {
       }
     } finally {
       await _connectionManager.disconnectFromDevice(deviceId);
+      // Scan'i yeniden başlat
+      _startScanWithAutoStop();
     }
   }
 
@@ -200,10 +205,13 @@ class _ScannerPageState extends State<ScannerPage> {
     final confirmed = await _showExitMessageDialog(messageInfo);
     if (confirmed != true) return;
 
+    // Bağlanmadan önce scan'i durdur (BLE stack çakışmasını önle)
+    await _bleManager.stopScan();
+
     try {
       // Cihaza bağlan
       await _connectionManager.connectToDevice(deviceId);
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 200));
 
       // Mesajı gönder (şifre otomatik eklenir)
       final success = await _messageSender.sendExitMessage(cardBytes, device);
@@ -219,6 +227,8 @@ class _ScannerPageState extends State<ScannerPage> {
       }
     } finally {
       await _connectionManager.disconnectFromDevice(deviceId);
+      // Scan'i yeniden başlat
+      _startScanWithAutoStop();
     }
   }
 
@@ -226,9 +236,12 @@ class _ScannerPageState extends State<ScannerPage> {
   Future<void> _configureCard(String deviceId) async {
     if (_buttonsDisabled) return;
 
+    // Bağlanmadan önce scan'i durdur
+    await _bleManager.stopScan();
+
     try {
       await _connectionManager.connectToDevice(deviceId);
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 200));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -247,7 +260,7 @@ class _ScannerPageState extends State<ScannerPage> {
         onCardReceived: (cardBytes) async {
           await CardManager.saveCardToConfig(cardBytes);
           final displayString = CardManager.bytesToHexString(cardBytes);
-          
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -258,6 +271,7 @@ class _ScannerPageState extends State<ScannerPage> {
             );
           }
           await _connectionManager.disconnectFromDevice(deviceId);
+          _startScanWithAutoStop();
         },
         onError: (error) {
           if (mounted) {
@@ -270,12 +284,14 @@ class _ScannerPageState extends State<ScannerPage> {
             );
           }
           _connectionManager.disconnectFromDevice(deviceId);
+          _startScanWithAutoStop();
         },
       );
 
       await _cardConfigHandler!.startListening();
     } catch (e) {
       await _connectionManager.disconnectFromDevice(deviceId);
+      _startScanWithAutoStop();
     }
   }
 
