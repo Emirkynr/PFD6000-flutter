@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import '../ble/ble_manager.dart';
 import '../ble/ble_service.dart';
@@ -13,11 +12,6 @@ import 'scanner/managers/connection_manager.dart';
 import 'scanner/managers/message_sender.dart';
 import 'scanner/managers/card_config_handler.dart';
 import 'message_log_page.dart';
-import '../services/favorites_service.dart';
-import '../services/history_service.dart';
-import '../services/auto_open_service.dart';
-import '../services/settings_service.dart';
-import 'package:local_auth/local_auth.dart';
 
 /// Ana tarayıcı sayfası - BLE cihaz tarama ve mesaj gönderme
 /// Raw data'dan cihaz adı ve şifre çıkararak giriş/çıkış mesajları gönderir
@@ -43,19 +37,15 @@ class _ScannerPageState extends State<ScannerPage> {
   List<int> newMD5 = [];
   final Map<String, bool> _deviceConnections = {};
   bool _buttonsDisabled = false;
-  String _doorStatus = "";
-  StreamSubscription<DeviceConnectionState>? _connectionStateSub;
-  BleStatus _bleStatus = BleStatus.unknown;
-  StreamSubscription<BleStatus>? _bleStatusSub;
-  String? _lastUsedDeviceId;
-  Set<String> _favoriteIds = {};
   bool _hasCard = false;
-  final AutoOpenService _autoOpenService = AutoOpenService();
-  bool _autoOpenEnabled = false;
+  String _doorStatus = "";
+  Set<String> _favoriteIds = {};
+  StreamSubscription<DeviceConnectionState>? _connectionStateSub;
 
   @override
   void initState() {
     super.initState();
+    _loadCardStatus();
 
     // Manager'ları başlat
     _connectionManager = ConnectionManager(
@@ -66,14 +56,8 @@ class _ScannerPageState extends State<ScannerPage> {
 
     // BLE cihaz taramasını dinle ve raw data 0x50 0x54 ile filtrele
     _bleManager.devicesStream.listen((list) {
-      final filtered =
-          list.where((device) => DeviceFilter.hasRawData5054(device)).toList();
+      final filtered = list.where((device) => DeviceFilter.hasRawData5054(device)).toList();
       setState(() => devices = filtered);
-
-      // Otomatik acma kontrolu
-      if (_autoOpenEnabled && !_buttonsDisabled) {
-        _checkAutoOpen(filtered);
-      }
     });
 
     // BLE bağlantı durumunu dinle
@@ -87,18 +71,16 @@ class _ScannerPageState extends State<ScannerPage> {
       }
     });
 
-    // Favorileri ve son kullanilan kapiyi yukle
-    _loadFavorites();
-
-    // BLE adapter durumunu dinle
-    _bleStatusSub = FlutterReactiveBle().statusStream.listen((status) {
-      if (!mounted) return;
-      setState(() => _bleStatus = status);
-    });
-
     // Taramayı başlat
     _startScanWithAutoStop();
     _startContinuousScanning();
+  }
+
+  Future<void> _loadCardStatus() async {
+    final cardBytes = await CardManager.getConfiguredCardNumber();
+    if (mounted) {
+      setState(() => _hasCard = cardBytes.isNotEmpty);
+    }
   }
 
   /// BLE taramasını başlat ve 20 saniye sonra durdur
@@ -119,7 +101,7 @@ class _ScannerPageState extends State<ScannerPage> {
 
   /// Her 15 saniyede bir yeni tarama başlat
   void _startContinuousScanning() {
-    Timer.periodic(const Duration(seconds: 10), (timer) {
+    Timer.periodic(const Duration(seconds: 15), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
@@ -137,43 +119,43 @@ class _ScannerPageState extends State<ScannerPage> {
     print('Find Device');
     // Device'ı bul
     final device = devices.firstWhere((d) => d.id == deviceId);
-
+    
     // Kayıtlı kart numarasını al
     print('Find Card');
     final cardBytes = await CardManager.getConfiguredCardNumber();
-    if (cardBytes.isEmpty) return;
-
-    // V2: No confirmation dialog - show immediate feedback
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          duration: const Duration(seconds: 2),
-          content: const Text('Giriş işlemi başlatıldı...'),
-          backgroundColor: Colors.blue.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+    if (cardBytes.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Hata: Önce alt menüden Kart Tanımla işlemi yapmalısınız!'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
     }
-    print('Starting Entry Process');
+
+    final messageInfo = MessageSender.getEntryMessageInfo(cardBytes);
+    
+    // Kullanıcıya onay sor
+    final confirmed = await _showEntryMessageDialog(messageInfo, cardBytes);
+    if (confirmed != true) return;
+    print('Confirmed');
 
     try {
       // Cihaza bağlan
       print('Connect Device');
       await _connectionManager.connectToDevice(deviceId);
-      await Future.delayed(const Duration(milliseconds: 100));
+      print('Connect Device delay');
+      await Future.delayed(const Duration(milliseconds: 200));
+      print('Connect Device delay done');
 
       // Mesajı gönder (şifre otomatik eklenir)
       print('Send Message');
       final success = await _messageSender.sendEntryMessage(cardBytes, device);
       print('Send Message Done');
       if (success && mounted) {
-        HapticFeedback.heavyImpact();
-        final deviceName = DeviceFilter.extractDeviceName(device);
-        FavoritesService.saveLastDevice(deviceId, deviceName);
-        HistoryService.addEntry(doorName: deviceName, doorId: deviceId, action: 'entry', success: true);
-        setState(() => _lastUsedDeviceId = deviceId);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             duration: Duration(seconds: 2),
@@ -193,46 +175,44 @@ class _ScannerPageState extends State<ScannerPage> {
   /// Mesaj formatı: [komut 16 byte] + [kart 16/32 byte] + [flag 0x01] + [şifre 8 byte]
   Future<void> _sendExitMessage(String deviceId) async {
     if (_buttonsDisabled) return;
-
+    
     // Device'ı bul
     final device = devices.firstWhere((d) => d.id == deviceId);
-
+    
     // Kayıtlı kart numarasını al
     final cardBytes = await CardManager.getConfiguredCardNumber();
-    if (cardBytes.isEmpty) return;
-
-    // V2: No confirmation dialog - show immediate feedback (like entry)
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          duration: const Duration(seconds: 2),
-          content: const Text('Çıkış işlemi başlatıldı...'),
-          backgroundColor: Colors.orange.shade700,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+    if (cardBytes.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Hata: Önce alt menüden Kart Tanımla işlemi yapmalısınız!'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
     }
+
+    final messageInfo = MessageSender.getExitMessageInfo(cardBytes);
+    
+    // Kullanıcıya onay sor
+    final confirmed = await _showExitMessageDialog(messageInfo);
+    if (confirmed != true) return;
 
     try {
       // Cihaza bağlan
       await _connectionManager.connectToDevice(deviceId);
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future.delayed(const Duration(milliseconds: 500));
 
       // Mesajı gönder (şifre otomatik eklenir)
       final success = await _messageSender.sendExitMessage(cardBytes, device);
       if (success && mounted) {
-        HapticFeedback.heavyImpact();
-        final deviceName = DeviceFilter.extractDeviceName(device);
-        FavoritesService.saveLastDevice(deviceId, deviceName);
-        HistoryService.addEntry(doorName: deviceName, doorId: deviceId, action: 'exit', success: true);
-        setState(() => _lastUsedDeviceId = deviceId);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             duration: Duration(seconds: 2),
-            content: Text('Güle Güle - Çıkış mesajı gönderildi'),
-            backgroundColor: Colors.orange,
+            content: Text('Kart numarası gönderildi - Çıkış'),
+            backgroundColor: Colors.red,
           ),
         );
         _disableButtonsTemporarily("Kapı açıldı (Çıkış)");
@@ -250,17 +230,12 @@ class _ScannerPageState extends State<ScannerPage> {
       await _connectionManager.connectToDevice(deviceId);
       await Future.delayed(const Duration(milliseconds: 500));
 
-      // V2: Enhanced SnackBar feedback
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            duration: const Duration(seconds: 3),
-            content: const Text(
-                'Kart konfigürasyonu başlatılıyor... Lütfen kartı okuyucuya yaklaştırın'),
-            backgroundColor: Colors.orange.shade700,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          const SnackBar(
+            duration: Duration(seconds: 3),
+            content: Text('Kart konfigürasyonu başlatılıyor... Lütfen kartı okuyucuya yaklaştırın'),
+            backgroundColor: Colors.orange,
           ),
         );
       }
@@ -272,14 +247,12 @@ class _ScannerPageState extends State<ScannerPage> {
         onCardReceived: (cardBytes) async {
           await CardManager.saveCardToConfig(cardBytes);
           final displayString = CardManager.bytesToHexString(cardBytes);
-          setState(() => _hasCard = true);
-
+          
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 duration: const Duration(seconds: 3),
-                content: Text(
-                    'Kart numarası kaydedildi (${cardBytes.length} byte):\n$displayString'),
+                content: Text('Kart numarası kaydedildi (${cardBytes.length} byte):\n$displayString'),
                 backgroundColor: Colors.green,
               ),
             );
@@ -306,6 +279,89 @@ class _ScannerPageState extends State<ScannerPage> {
     }
   }
 
+  /// Giriş mesajı onay dialogu
+  /// Mesaj detaylarını gösterir: komut, kart, flag, şifre, toplam byte
+  Future<bool?> _showEntryMessageDialog(Map<String, dynamic> info, List<int> cardBytes) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Giriş Mesajı Gönder'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Gönderilecek mesaj:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text('Komut: 16 byte'),
+            Text('  ${info['commandHex']}', style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+            const SizedBox(height: 4),
+            Text('Kart: ${info['cardLength']} byte'),
+            Text('  ${info['cardString']}', style: const TextStyle(fontSize: 11)),
+            const SizedBox(height: 4),
+            const Text('Flag: 0x00 (Giriş)', style: TextStyle(fontSize: 11, color: Colors.blue)),
+            const SizedBox(height: 4),
+            const Text('Şifre: 8 byte', style: TextStyle(fontSize: 11, color: Colors.purple)),
+            const SizedBox(height: 4),
+            Text('Toplam: ${info['totalBytes'] + 8} byte', style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            const Text('Mesajı göndermek istiyor musunuz?'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Gönder'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Çıkış mesajı onay dialogu
+  /// Mesaj detaylarını gösterir: komut, kart, flag (0x01), şifre, toplam byte
+  Future<bool?> _showExitMessageDialog(Map<String, dynamic> info) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Çıkış Mesajı Gönder'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Gönderilecek mesaj:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text('Komut: 16 byte'),
+            const SizedBox(height: 4),
+            Text('Kart: ${info['cardHex']}', style: const TextStyle(fontSize: 11, fontFamily: 'monospace')),
+            Text('  STR: ${info['cardString']}', style: const TextStyle(fontSize: 11)),
+            const SizedBox(height: 4),
+            const Text('Flag: 0x01 (Çıkış)', style: TextStyle(fontSize: 11, color: Colors.orange)),
+            const SizedBox(height: 4),
+            const Text('Şifre: 8 byte', style: TextStyle(fontSize: 11, color: Colors.purple)),
+            const SizedBox(height: 4),
+            Text('Toplam: ${info['totalBytes'] + 8 + 16} byte', style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            const Text('Mesajı göndermek istiyor musunuz?'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Gönder'),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Butonları geçici olarak devre dışı bırak (6 saniye)
   /// Kapı açıldıktan sonra spam gönderimi engellemek için kullanılır
   void _disableButtonsTemporarily(String status) {
@@ -322,111 +378,6 @@ class _ScannerPageState extends State<ScannerPage> {
       });
       _refreshConnections();
     });
-  }
-
-  /// Favoriler, son kullanilan kapi ve kart durumunu yukle
-  Future<void> _loadFavorites() async {
-    await FavoritesService.preload();
-    await SettingsService.preload();
-    final lastId = await FavoritesService.getLastDeviceId();
-    final favIds = await FavoritesService.getFavoriteIds();
-    final cardBytes = await CardManager.getConfiguredCardNumber();
-    final autoOpen = await SettingsService.isAutoOpenEnabled();
-    if (mounted) {
-      setState(() {
-        _lastUsedDeviceId = lastId;
-        _favoriteIds = favIds;
-        _hasCard = cardBytes.isNotEmpty;
-        _autoOpenEnabled = autoOpen;
-      });
-    }
-  }
-
-  /// Otomatik kapi acma kontrolu
-  Future<void> _checkAutoOpen(List<DiscoveredDevice> filteredDevices) async {
-    final deviceId = await _autoOpenService.checkDevices(filteredDevices);
-    if (deviceId == null) return;
-
-    try {
-      // Biyometrik onay gerekiyorsa
-      final needBiometric = await _autoOpenService.isBiometricRequired();
-      if (needBiometric) {
-        final auth = LocalAuthentication();
-        final didAuth = await auth.authenticate(
-          localizedReason: 'Kapi acmak icin dogrulayin',
-          options: const AuthenticationOptions(biometricOnly: true),
-        );
-        if (!didAuth) {
-          _autoOpenService.completeProcessing();
-          return;
-        }
-      }
-
-      // Giris komutunu gonder
-      await _sendEntryMessage(deviceId);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            duration: const Duration(seconds: 3),
-            content: const Text('Otomatik giris yapildi'),
-            backgroundColor: Colors.teal,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('AutoOpen hata: $e');
-    } finally {
-      _autoOpenService.completeProcessing();
-    }
-  }
-
-  /// Favori toggle
-  Future<void> _toggleFavorite(String deviceId, String deviceName) async {
-    final added = await FavoritesService.toggleFavorite(deviceId, deviceName);
-    final favIds = await FavoritesService.getFavoriteIds();
-    if (mounted) {
-      setState(() => _favoriteIds = favIds);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          duration: const Duration(seconds: 1),
-          content: Text(added ? 'Favorilere eklendi' : 'Favorilerden çıkarıldı'),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-    }
-  }
-
-  /// Cihaz listesini sirala: favoriler > son kullanilan > RSSI
-  List<DiscoveredDevice> _sortDevices(List<DiscoveredDevice> devices) {
-    final sorted = List<DiscoveredDevice>.from(devices);
-    sorted.sort((a, b) {
-      final aFav = _favoriteIds.contains(a.id) ? 0 : 1;
-      final bFav = _favoriteIds.contains(b.id) ? 0 : 1;
-      if (aFav != bFav) return aFav.compareTo(bFav);
-
-      final aLast = a.id == _lastUsedDeviceId ? 0 : 1;
-      final bLast = b.id == _lastUsedDeviceId ? 0 : 1;
-      if (aLast != bLast) return aLast.compareTo(bLast);
-
-      return b.rssi.compareTo(a.rssi); // Guclu sinyal once
-    });
-    return sorted;
-  }
-
-  /// BLE durum ikonu
-  Widget _buildBleStatusIcon() {
-    final bool btReady = _bleStatus == BleStatus.ready;
-    if (!btReady) {
-      return const Icon(Icons.bluetooth_disabled, color: Colors.red, size: 20);
-    }
-    if (scanning) {
-      return const Icon(Icons.bluetooth_searching, color: Colors.lightBlueAccent, size: 20);
-    }
-    return const Icon(Icons.bluetooth, color: Colors.white70, size: 20);
   }
 
   /// BLE bağlantılarını sıfırla
@@ -461,6 +412,8 @@ class _ScannerPageState extends State<ScannerPage> {
     );
   }
 
+  void _toggleFavorite(String deviceId, String deviceName) {}
+
   /// Widget dispose - kaynakları temizle
   /// BLE bağlantıları, timer'lar ve subscription'ları iptal eder
   @override
@@ -468,10 +421,8 @@ class _ScannerPageState extends State<ScannerPage> {
     _bleManager.dispose();
     _bleService.dispose();
     _connectionStateSub?.cancel();
-    _bleStatusSub?.cancel();
     _scanAutoStopTimer?.cancel();
     _cardConfigHandler?.stopListening();
-    _autoOpenService.dispose();
     super.dispose();
   }
 
@@ -479,64 +430,42 @@ class _ScannerPageState extends State<ScannerPage> {
   /// AppBar, Drawer (ayarlar), kapı durumu, cihaz listesi içerir
   @override
   Widget build(BuildContext context) {
-    // Import MyApp for theme toggling
-    // Note: Assuming MyApp is in main.dart which is usually imported or available.
-    // If not, we might need to add the import line at top.
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          "ENKA",
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 24,
-            letterSpacing: 1.5,
-          ),
-        ),
-        centerTitle: true,
+        title: const Text("Poli BLE Reader"),
+        backgroundColor: const Color(0xFF1976D2),
+        foregroundColor: Colors.white,
         leading: Builder(
           builder: (context) => IconButton(
             icon: const Icon(Icons.menu),
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: _buildBleStatusIcon(),
-          ),
-        ],
       ),
       drawer: const Drawer(
         child: MessageSettingsDrawer(),
       ),
-      body: KeyedSubtree(
-        key: ValueKey(Theme.of(context).brightness),
-        child: Column(
-          children: [
-            DoorStatusBanner(doorStatus: _doorStatus),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async {
-                  _startScanWithAutoStop();
-                  await Future.delayed(const Duration(milliseconds: 400));
-                },
-                child: DeviceList(
-                  devices: _sortDevices(devices),
-                  deviceConnections: _deviceConnections,
-                  buttonsDisabled: _buttonsDisabled,
-                  favoriteIds: _favoriteIds,
-                  hasCard: _hasCard,
-                  onEntry: _sendEntryMessage,
-                  onExit: _sendExitMessage,
-                  onTest: _showMessageLog,
-                  onCardConfig: _configureCard,
-                  onToggleFavorite: _toggleFavorite,
-                ),
+      body: Column(
+        children: [
+          DoorStatusBanner(doorStatus: _doorStatus),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                _startScanWithAutoStop();
+                await Future.delayed(const Duration(milliseconds: 400));
+              },
+              child: DeviceList(
+                devices: devices,
+                deviceConnections: _deviceConnections,
+                buttonsDisabled: _buttonsDisabled,
+                onEntry: _sendEntryMessage,
+                onExit: _sendExitMessage,
+                onTest: _showMessageLog,
+                onCardConfig: _configureCard,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
