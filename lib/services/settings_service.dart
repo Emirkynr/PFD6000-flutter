@@ -13,9 +13,11 @@ class SettingsService {
   static const _notificationEnabled = 'notification_enabled';
   static const _notificationSound = 'notification_sound';
   static const _notificationVibrate = 'notification_vibrate';
+  static const _quickMode = 'quick_mode';
 
   // Cache
   static bool? _cachedAutoOpen;
+  static bool? _cachedQuickMode;
   static int? _cachedRssiThreshold;
   static int? _cachedCooldown;
   static bool? _cachedBiometric;
@@ -148,6 +150,21 @@ class SettingsService {
     await prefs.setBool(_notificationVibrate, value);
   }
 
+  // --- Hızlı Mod ---
+
+  static Future<bool> isQuickModeEnabled() async {
+    if (_cachedQuickMode != null) return _cachedQuickMode!;
+    final prefs = await SharedPreferences.getInstance();
+    _cachedQuickMode = prefs.getBool(_quickMode) ?? false;
+    return _cachedQuickMode!;
+  }
+
+  static Future<void> setQuickModeEnabled(bool value) async {
+    _cachedQuickMode = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_quickMode, value);
+  }
+
   /// Tum ayarlari onbellege al
   static Future<void> preload() async {
     await isAutoOpenEnabled();
@@ -159,5 +176,6 @@ class SettingsService {
     await isNotificationEnabled();
     await isNotificationSoundEnabled();
     await isNotificationVibrateEnabled();
+    await isQuickModeEnabled();
   }
 }

@@ -16,6 +16,11 @@ class BleService {
   StreamSubscription<ConnectionStateUpdate>? _connectionSubscription;
   QualifiedCharacteristic? _writeCharacteristic;
   QualifiedCharacteristic? _readCharacteristic;
+
+  // Characteristic cache — deviceId başına write/read karakteristikleri saklar
+  // discoverAllServices() maliyetli çağrısını sonraki bağlantılarda atlar
+  final Map<String, ({QualifiedCharacteristic? write, QualifiedCharacteristic? read})>
+      _characteristicCache = {};
   
 
   Future<bool> connectToDevice(String deviceId) async {
@@ -70,6 +75,16 @@ class BleService {
   }
 
   Future<void> discoverServices(String deviceId) async {
+    // Cache varsa discovery'yi atla — karakteristikler cihaz bazında sabittir
+    if (_characteristicCache.containsKey(deviceId)) {
+      final cached = _characteristicCache[deviceId]!;
+      _writeCharacteristic = cached.write;
+      _readCharacteristic = cached.read;
+      print('Characteristic cache hit: $deviceId — discovery atlandı');
+      if (_readCharacteristic != null) await startESPNotificationListening();
+      return;
+    }
+
     try {
       print('Servisler keşfediliyor...');
       await _ble.discoverAllServices(deviceId);
@@ -151,6 +166,13 @@ class BleService {
       if (_readCharacteristic != null) {
         await startESPNotificationListening();
       }
+
+      // Başarılı discovery'yi cache'e yaz
+      _characteristicCache[deviceId] = (
+        write: _writeCharacteristic,
+        read: _readCharacteristic,
+      );
+      print('Characteristic cache yazıldı: $deviceId');
     } catch (e) {
       print('Servis keşfi hatası: $e');
     }

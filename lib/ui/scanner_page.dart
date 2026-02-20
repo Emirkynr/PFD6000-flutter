@@ -12,6 +12,7 @@ import 'scanner/managers/connection_manager.dart';
 import 'scanner/managers/message_sender.dart';
 import 'scanner/managers/card_config_handler.dart';
 import 'message_log_page.dart';
+import '../services/settings_service.dart';
 
 /// Ana tarayıcı sayfası - BLE cihaz tarama ve mesaj gönderme
 /// Raw data'dan cihaz adı ve şifre çıkararak giriş/çıkış mesajları gönderir
@@ -34,6 +35,7 @@ class _ScannerPageState extends State<ScannerPage> {
   bool scanning = false;
   Timer? _scanAutoStopTimer;
   Timer? _continuousScanTimer;
+  Timer? _connectionKeepAliveTimer;
   List<DiscoveredDevice> devices = [];
   List<int> newMD5 = [];
   final Map<String, bool> _deviceConnections = {};
@@ -142,13 +144,17 @@ class _ScannerPageState extends State<ScannerPage> {
     }
 
     final messageInfo = MessageSender.getEntryMessageInfo(cardBytes);
-    
-    // Kullanıcıya onay sor
-    final confirmed = await _showEntryMessageDialog(messageInfo, cardBytes);
-    if (confirmed != true) return;
+
+    // Hızlı mod kapalıysa onay dialogu göster
+    final quickMode = await SettingsService.isQuickModeEnabled();
+    if (!quickMode) {
+      final confirmed = await _showEntryMessageDialog(messageInfo, cardBytes);
+      if (confirmed != true) return;
+    }
     print('Confirmed');
 
     // Bağlanmadan önce tüm scan aktivitesini durdur (BLE stack çakışmasını önle)
+    _connectionKeepAliveTimer?.cancel();
     _continuousScanTimer?.cancel();
     _scanAutoStopTimer?.cancel();
     await _bleManager.stopScan();
@@ -176,8 +182,12 @@ class _ScannerPageState extends State<ScannerPage> {
         _disableButtonsTemporarily("Kapı açıldı (Giriş)");
       }
     } finally {
-      await _connectionManager.disconnectFromDevice(deviceId);
-      // Scan ve periodic timer'ı yeniden başlat
+      // Bağlantıyı hemen kesme — 30s keep-alive başlat
+      _connectionKeepAliveTimer?.cancel();
+      _connectionKeepAliveTimer = Timer(const Duration(seconds: 30), () async {
+        await _connectionManager.disconnectFromDevice(deviceId);
+      });
+      // Scan'i bağlantı açıkken de yeniden başlat
       _startScanWithAutoStop();
       _startContinuousScanning();
     }
@@ -210,12 +220,16 @@ class _ScannerPageState extends State<ScannerPage> {
     }
 
     final messageInfo = MessageSender.getExitMessageInfo(cardBytes);
-    
-    // Kullanıcıya onay sor
-    final confirmed = await _showExitMessageDialog(messageInfo);
-    if (confirmed != true) return;
+
+    // Hızlı mod kapalıysa onay dialogu göster
+    final quickMode = await SettingsService.isQuickModeEnabled();
+    if (!quickMode) {
+      final confirmed = await _showExitMessageDialog(messageInfo);
+      if (confirmed != true) return;
+    }
 
     // Bağlanmadan önce tüm scan aktivitesini durdur (BLE stack çakışmasını önle)
+    _connectionKeepAliveTimer?.cancel();
     _continuousScanTimer?.cancel();
     _scanAutoStopTimer?.cancel();
     await _bleManager.stopScan();
@@ -238,8 +252,11 @@ class _ScannerPageState extends State<ScannerPage> {
         _disableButtonsTemporarily("Kapı açıldı (Çıkış)");
       }
     } finally {
-      await _connectionManager.disconnectFromDevice(deviceId);
-      // Scan ve periodic timer'ı yeniden başlat
+      // Bağlantıyı hemen kesme — 30s keep-alive başlat
+      _connectionKeepAliveTimer?.cancel();
+      _connectionKeepAliveTimer = Timer(const Duration(seconds: 30), () async {
+        await _connectionManager.disconnectFromDevice(deviceId);
+      });
       _startScanWithAutoStop();
       _startContinuousScanning();
     }
@@ -250,6 +267,7 @@ class _ScannerPageState extends State<ScannerPage> {
     if (_buttonsDisabled) return;
 
     // Bağlanmadan önce tüm scan aktivitesini durdur
+    _connectionKeepAliveTimer?.cancel();
     _continuousScanTimer?.cancel();
     _scanAutoStopTimer?.cancel();
     await _bleManager.stopScan();
@@ -452,6 +470,7 @@ class _ScannerPageState extends State<ScannerPage> {
   /// BLE bağlantıları, timer'lar ve subscription'ları iptal eder
   @override
   void dispose() {
+    _connectionKeepAliveTimer?.cancel();
     _bleManager.dispose();
     _bleService.dispose();
     _connectionStateSub?.cancel();

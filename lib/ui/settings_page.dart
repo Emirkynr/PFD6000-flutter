@@ -19,6 +19,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _notificationEnabled = false;
   bool _notificationSound = true;
   bool _notificationVibrate = true;
+  bool _quickModeEnabled = false;
   bool _loading = true;
 
   @override
@@ -37,6 +38,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final notif = await SettingsService.isNotificationEnabled();
     final notifSound = await SettingsService.isNotificationSoundEnabled();
     final notifVibrate = await SettingsService.isNotificationVibrateEnabled();
+    final quickMode = await SettingsService.isQuickModeEnabled();
 
     if (mounted) {
       setState(() {
@@ -49,6 +51,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _notificationEnabled = notif;
         _notificationSound = notifSound;
         _notificationVibrate = notifVibrate;
+        _quickModeEnabled = quickMode;
         _loading = false;
       });
     }
@@ -301,6 +304,34 @@ class _SettingsPageState extends State<SettingsPage> {
                         },
                       ),
                     ],
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+
+                // --- Bolum 4: Hizli Mod ---
+                _buildSectionHeader(
+                  context,
+                  icon: Icons.flash_on,
+                  title: 'Hizli Mod',
+                ),
+                _buildCard(
+                  context,
+                  children: [
+                    SwitchListTile(
+                      title: const Text('Onay Ekrani Olmadan Gonder'),
+                      subtitle: const Text(
+                          'Giris/Cikis butonuna basinca dogrudan gonderir'),
+                      secondary: Icon(Icons.flash_on,
+                          color: _quickModeEnabled
+                              ? colorScheme.primary
+                              : colorScheme.outline),
+                      value: _quickModeEnabled,
+                      onChanged: (value) async {
+                        setState(() => _quickModeEnabled = value);
+                        await SettingsService.setQuickModeEnabled(value);
+                      },
+                    ),
                   ],
                 ),
 
