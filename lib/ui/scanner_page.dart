@@ -33,6 +33,7 @@ class _ScannerPageState extends State<ScannerPage> {
   // UI durumları
   bool scanning = false;
   Timer? _scanAutoStopTimer;
+  Timer? _continuousScanTimer;
   List<DiscoveredDevice> devices = [];
   List<int> newMD5 = [];
   final Map<String, bool> _deviceConnections = {};
@@ -100,8 +101,10 @@ class _ScannerPageState extends State<ScannerPage> {
   }
 
   /// Her 15 saniyede bir yeni tarama başlat
+  /// Timer referansı saklanır — bağlantı öncesi iptal edilebilir
   void _startContinuousScanning() {
-    Timer.periodic(const Duration(seconds: 15), (timer) {
+    _continuousScanTimer?.cancel();
+    _continuousScanTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
@@ -117,8 +120,10 @@ class _ScannerPageState extends State<ScannerPage> {
     if (_buttonsDisabled) return;
 
     print('Find Device');
-    // Device'ı bul
-    final device = devices.firstWhere((d) => d.id == deviceId);
+    // Device'ı bul (listeden çıkmış olabilir — güvenli kontrol)
+    final deviceIndex = devices.indexWhere((d) => d.id == deviceId);
+    if (deviceIndex == -1) return;
+    final device = devices[deviceIndex];
     
     // Kayıtlı kart numarasını al
     print('Find Card');
@@ -143,7 +148,9 @@ class _ScannerPageState extends State<ScannerPage> {
     if (confirmed != true) return;
     print('Confirmed');
 
-    // Bağlanmadan önce scan'i durdur (BLE stack çakışmasını önle)
+    // Bağlanmadan önce tüm scan aktivitesini durdur (BLE stack çakışmasını önle)
+    _continuousScanTimer?.cancel();
+    _scanAutoStopTimer?.cancel();
     await _bleManager.stopScan();
 
     try {
@@ -170,8 +177,9 @@ class _ScannerPageState extends State<ScannerPage> {
       }
     } finally {
       await _connectionManager.disconnectFromDevice(deviceId);
-      // Scan'i yeniden başlat
+      // Scan ve periodic timer'ı yeniden başlat
       _startScanWithAutoStop();
+      _startContinuousScanning();
     }
   }
 
@@ -181,9 +189,11 @@ class _ScannerPageState extends State<ScannerPage> {
   Future<void> _sendExitMessage(String deviceId) async {
     if (_buttonsDisabled) return;
     
-    // Device'ı bul
-    final device = devices.firstWhere((d) => d.id == deviceId);
-    
+    // Device'ı bul (listeden çıkmış olabilir — güvenli kontrol)
+    final deviceIndex = devices.indexWhere((d) => d.id == deviceId);
+    if (deviceIndex == -1) return;
+    final device = devices[deviceIndex];
+
     // Kayıtlı kart numarasını al
     final cardBytes = await CardManager.getConfiguredCardNumber();
     if (cardBytes.isEmpty) {
@@ -205,7 +215,9 @@ class _ScannerPageState extends State<ScannerPage> {
     final confirmed = await _showExitMessageDialog(messageInfo);
     if (confirmed != true) return;
 
-    // Bağlanmadan önce scan'i durdur (BLE stack çakışmasını önle)
+    // Bağlanmadan önce tüm scan aktivitesini durdur (BLE stack çakışmasını önle)
+    _continuousScanTimer?.cancel();
+    _scanAutoStopTimer?.cancel();
     await _bleManager.stopScan();
 
     try {
@@ -227,8 +239,9 @@ class _ScannerPageState extends State<ScannerPage> {
       }
     } finally {
       await _connectionManager.disconnectFromDevice(deviceId);
-      // Scan'i yeniden başlat
+      // Scan ve periodic timer'ı yeniden başlat
       _startScanWithAutoStop();
+      _startContinuousScanning();
     }
   }
 
@@ -236,7 +249,9 @@ class _ScannerPageState extends State<ScannerPage> {
   Future<void> _configureCard(String deviceId) async {
     if (_buttonsDisabled) return;
 
-    // Bağlanmadan önce scan'i durdur
+    // Bağlanmadan önce tüm scan aktivitesini durdur
+    _continuousScanTimer?.cancel();
+    _scanAutoStopTimer?.cancel();
     await _bleManager.stopScan();
 
     try {
@@ -272,6 +287,7 @@ class _ScannerPageState extends State<ScannerPage> {
           }
           await _connectionManager.disconnectFromDevice(deviceId);
           _startScanWithAutoStop();
+          _startContinuousScanning();
         },
         onError: (error) {
           if (mounted) {
@@ -285,6 +301,7 @@ class _ScannerPageState extends State<ScannerPage> {
           }
           _connectionManager.disconnectFromDevice(deviceId);
           _startScanWithAutoStop();
+          _startContinuousScanning();
         },
       );
 
@@ -292,6 +309,7 @@ class _ScannerPageState extends State<ScannerPage> {
     } catch (e) {
       await _connectionManager.disconnectFromDevice(deviceId);
       _startScanWithAutoStop();
+      _startContinuousScanning();
     }
   }
 
@@ -438,6 +456,7 @@ class _ScannerPageState extends State<ScannerPage> {
     _bleService.dispose();
     _connectionStateSub?.cancel();
     _scanAutoStopTimer?.cancel();
+    _continuousScanTimer?.cancel();
     _cardConfigHandler?.stopListening();
     super.dispose();
   }
